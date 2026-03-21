@@ -65,8 +65,8 @@ const DEMO_REPORT: FitCheckReport = {
         evidence: [
           {
             quote: '"Got my first useful dashboard in under 10 minutes, no joke."',
-            sourceLabel: "Product Hunt review",
-            sourceUrl: "https://producthunt.com",
+            sourceLabel: "G2 review",
+            sourceUrl: "https://g2.com",
           },
         ],
       },

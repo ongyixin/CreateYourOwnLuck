@@ -266,19 +266,18 @@ function resolveScrapeStages(
     updateStage(jobId, "scrape_social", "complete");
   }
 
-  // Enrichment data (jobs, YouTube, Product Hunt, autocomplete)
+  // Enrichment data (YouTube, autocomplete)
   if (!selected.has("enrichment")) {
     updateStage(jobId, "scrape_enrichment", "skipped", "Not selected");
   } else {
     const hasEnrichment =
       (data.videos && data.videos.length > 0) ||
-      (data.productHuntEntries && data.productHuntEntries.length > 0) ||
       (data.autocompleteSuggestions && data.autocompleteSuggestions.length > 0);
 
     if (hasEnrichment) {
       updateStage(jobId, "scrape_enrichment", "complete");
     } else {
-      const msg = warnings.find((w) => /youtube|product hunt|autocomplete/i.test(w)) ?? "No enrichment data returned";
+      const msg = warnings.find((w) => /youtube|autocomplete/i.test(w)) ?? "No enrichment data returned";
       updateStage(jobId, "scrape_enrichment", "failed", msg);
     }
   }

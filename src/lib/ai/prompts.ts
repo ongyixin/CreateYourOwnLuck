@@ -287,7 +287,6 @@ const LIMITS = {
   maxSocialMentions: 10,
   video: 200,
   maxVideos: 5,
-  productHunt: 500,
   autocomplete: 300,
 };
 
@@ -419,17 +418,6 @@ export function formatContext(request: AnalysisRequest, data: ScrapedData): stri
     parts.push(`## Video Content (YouTube)\n${videoBlock}`);
   }
 
-  // Product Hunt launches
-  if (data.productHuntEntries && data.productHuntEntries.length > 0) {
-    const phBlock = data.productHuntEntries
-      .map(
-        (p) =>
-          `- **${p.name}**: "${p.tagline}" — ${p.upvotes} upvotes, ${p.commentsCount} comments${p.topics.length > 0 ? ` | Topics: ${p.topics.join(', ')}` : ''}`,
-      )
-      .join('\n');
-    parts.push(`## Product Hunt\n${truncate(phBlock, LIMITS.productHunt)}`);
-  }
-
   // Pass through any scraping warnings so the AI can caveat low-data sections
   if (data.warnings.length > 0) {
     parts.push(`## Data Gaps (scraping warnings)\n${data.warnings.join('\n')}`);
@@ -471,7 +459,7 @@ Focus on:
 - Rank audience segments by how strongly the current brand resonates with them.
 - Identify buying triggers: the specific moments or events that push someone to purchase.
 
-Where available, use structured reviews (reviewer roles from G2/Trustpilot reveal who's actually buying) and Twitter/X mentions (language patterns reveal real customer context). Product Hunt topics and autocomplete signals indicate how customers categorise this product.
+Where available, use structured reviews (reviewer roles from G2/Trustpilot reveal who's actually buying) and Twitter/X mentions (language patterns reveal real customer context). Autocomplete signals indicate how customers categorise this product.
 
 Do NOT produce stock personas like "SMB decision maker". Be specific about role, company stage, context, and what makes this person different. Draw on competitor positioning and public mentions to triangulate.
 
@@ -507,7 +495,7 @@ Based on ICP signals from the brand positioning and market signals from public m
 - Identify creators, podcasts, or newsletters with genuine audience overlap
 - Avoid generic recommendations like "go to LinkedIn" — prefer specific, actionable channels
 
-If public mentions reference Reddit threads, Hacker News posts, or review sites, use them to justify community suggestions. YouTube channels covering this product type are strong signals for creator partnerships. Product Hunt topics reveal which industries and buyer roles are most active.
+If public mentions reference Reddit threads, Hacker News posts, or review sites, use them to justify community suggestions. YouTube channels covering this product type are strong signals for creator partnerships.
 
 ---
 

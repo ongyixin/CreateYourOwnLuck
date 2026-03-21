@@ -44,7 +44,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
     id: "enrichment",
     label: "Enrichment Data",
     description: "Signals about company direction and reach",
-    examples: "YouTube, Product Hunt, autocomplete",
+    examples: "YouTube, autocomplete",
     icon: <TrendingUp className="h-4 w-4" />,
   },
 ];

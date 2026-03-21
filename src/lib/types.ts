@@ -173,15 +173,6 @@ export interface VideoResult {
   url: string;
 }
 
-export interface ProductHuntEntry {
-  name: string;
-  tagline: string;
-  upvotes: number;
-  commentsCount: number;
-  topics: string[];
-  url?: string;
-}
-
 export interface ScrapedData {
   companyPages: ScrapedPage[];
   competitorPages: ScrapedPage[];
@@ -192,8 +183,6 @@ export interface ScrapedData {
   socialMentions?: SocialMention[];
   /** YouTube search results for brand/product content */
   videos?: VideoResult[];
-  /** Product Hunt launches */
-  productHuntEntries?: ProductHuntEntry[];
   /** Google autocomplete suggestions (e.g. "companyname pricing") */
   autocompleteSuggestions?: string[];
   /** Any scraping warnings, e.g. "competitor X timed out" */
@@ -477,7 +466,7 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   search_mentions:     "Searching for public mentions and reviews...",
   scrape_reviews:      "Scraping structured reviews (G2, Trustpilot)...",
   scrape_social:       "Scraping social media mentions...",
-  scrape_enrichment:   "Gathering job postings, videos, and Product Hunt data...",
+  scrape_enrichment:   "Gathering videos and autocomplete signals...",
   analyze_brand:       "Running AI brand analysis...",
   analyze_icp:         "Generating ICP profiles...",
   analyze_actionables: "Building brand direction actionables...",

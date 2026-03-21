@@ -13,7 +13,6 @@ export const ACTORS = {
   G2_SCRAPER: "zen-studio/g2-reviews-scraper",
   TRUSTPILOT_SCRAPER: "automation-lab/trustpilot-scraper",
   YOUTUBE_SCRAPER: "streamers/youtube-scraper",
-  PRODUCT_HUNT_SCRAPER: "michael.g/product-hunt-scraper",
   AUTOCOMPLETE_SCRAPER: "damilo/google-autocomplete-apify",
 } as const;
 
@@ -168,7 +167,6 @@ export function buildSearchQueries(
     `${quoted} site:g2.com`,
     `${quoted} site:trustpilot.com`,
     `${quoted} site:news.ycombinator.com`,
-    `${quoted} site:producthunt.com`,
     // News and PR coverage
     `${quoted} news OR "press release" OR announcement`,
     `${quoted} site:techcrunch.com OR site:venturebeat.com OR site:bloomberg.com`,

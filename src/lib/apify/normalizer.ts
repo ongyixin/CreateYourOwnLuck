@@ -13,7 +13,6 @@ import type {
   StructuredReview,
   SocialMention,
   VideoResult,
-  ProductHuntEntry,
 } from "../types";
 
 // Internal type used only for sorting — stripped before returning ScrapedPage[]
@@ -356,7 +355,7 @@ export function normalizeVideoResults(items: unknown[]): VideoResult[] {
     .slice(0, 10);
 }
 
-// ─── Product Hunt normalizer ──────────────────────────────────────────────────
+// ─── G2 URL extractor ─────────────────────────────────────────────────────────
 
 /**
  * Extract the first G2 product reviews URL found in mentions.
@@ -372,31 +371,6 @@ export function extractG2UrlFromMentions(
     /g2\.com\/products\/[^/]+\/reviews/.test(m.url ?? "")
   );
   return match?.url ?? null;
-}
-
-/**
- * Derive basic ProductHuntEntry records from Google search mentions.
- *
- * Because no Apify Product Hunt actor supports company-name search (they are
- * all date-based scrapers), we instead add a `site:producthunt.com` query to
- * the Google search pass and extract structured data from the result snippets.
- * Upvotes and commentsCount are unavailable via this path and default to 0.
- */
-export function extractProductHuntEntriesFromMentions(
-  mentions: PublicMention[]
-): ProductHuntEntry[] {
-  return mentions
-    .filter((m) => /producthunt\.com\/posts\//.test(m.url ?? ""))
-    .slice(0, 5)
-    .map((m) => ({
-      name: m.title ?? "",
-      tagline: m.snippet ?? "",
-      upvotes: 0,
-      commentsCount: 0,
-      topics: [],
-      url: m.url,
-    }))
-    .filter((e) => e.name !== "");
 }
 
 // ─── Autocomplete normalizer ──────────────────────────────────────────────────

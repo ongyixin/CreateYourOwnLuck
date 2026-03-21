@@ -17,7 +17,6 @@ import type {
   StructuredReview,
   SocialMention,
   VideoResult,
-  ProductHuntEntry,
 } from "../types";
 import { ALL_SCRAPER_SOURCES } from "../types";
 import { runActor } from "./client";
@@ -43,7 +42,6 @@ import {
   normalizeVideoResults,
   normalizeAutocompleteSuggestions,
   extractG2UrlFromMentions,
-  extractProductHuntEntriesFromMentions,
 } from "./normalizer";
 
 // ─── Page limits ──────────────────────────────────────────────────────────────
@@ -71,17 +69,15 @@ const CRAWLER_MEMORY_COMPETITOR_MB = 1024;
  * Two-phase execution:
  *
  * Phase 1 — Google search (awaited):
- *   Runs first so we can discover real G2 and Product Hunt URLs from the
- *   `site:g2.com` and `site:producthunt.com` queries. Guessing slugs from
- *   company names caused hard FAILED runs in the G2 actor; using confirmed
- *   URLs from search results eliminates that class of failure entirely.
+ *   Runs first so we can discover the real G2 URL from the `site:g2.com`
+ *   query. Guessing slugs from company names caused hard FAILED runs in the
+ *   G2 actor; using a confirmed URL from search results eliminates that
+ *   class of failure entirely.
  *
  * Phase 2 — Everything else (parallel):
  *   Twitter, G2 (real URL from Phase 1, skipped if not found), Trustpilot,
- *   YouTube, and Autocomplete run in parallel. Product Hunt entries are
- *   derived directly from Phase 1 mentions — no dedicated actor needed since
- *   all available PH actors are date-based scrapers, not company-search ones.
- *   Website crawlers are also started here but run sequentially to stay within
+ *   YouTube, and Autocomplete run in parallel. Website crawlers are also
+ *   started here but run sequentially to stay within
  *   the free-plan concurrent memory ceiling.
  *
  * Any individual failure is captured in `warnings` rather than thrown.
@@ -117,13 +113,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
 
   // Discover real G2 URL from search results (avoids slug-guessing failures).
   const g2Url = extractG2UrlFromMentions(mentions);
-
-  // Derive Product Hunt entries from search snippets — no dedicated actor needed.
-  const rawPH = selected.has("enrichment")
-    ? extractProductHuntEntriesFromMentions(mentions)
-    : [];
-  const productHuntEntries: ProductHuntEntry[] | undefined =
-    rawPH.length > 0 ? rawPH : undefined;
 
   // ── Phase 2: All remaining lightweight tasks (parallel) ────────────────────
 
@@ -333,7 +322,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     reviews,
     socialMentions,
     videos,
-    productHuntEntries,
     autocompleteSuggestions,
     warnings,
   };
