@@ -16,6 +16,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 RUN npm run build
+# Ensure public dir exists so the COPY in the runner stage never fails
+RUN mkdir -p public
 
 # ── Stage 3: Production runtime ───────────────────────────────────────────────
 FROM node:20-alpine AS runner
