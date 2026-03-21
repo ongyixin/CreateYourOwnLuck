@@ -1,23 +1,23 @@
-/**
- * Brand Perception section — Section 1 of the FitCheck report.
- *
- * Displays:
- * - Summary card with tone badges and consistency score gauge
- * - Perceived strengths (two-column grid)
- * - Weak / confusing signals (two-column grid)
- * - Evidence blocks anchoring each insight to real web data
- *
- * Owned by: report agent
- */
+"use client";
 
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, Target, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import NeonBadge from "@/components/neon-badge";
+import CountUp from "@/components/count-up";
 import { EvidenceBlock } from "./evidence-block";
 import type { BrandPerception, BrandInsight } from "@/lib/types";
 
-// ─── Consistency score helpers ─────────────────────────────────────────────
+function scoreColor(score: number): string {
+  if (score >= 75) return "text-neon-green";
+  if (score >= 50) return "text-neon-amber";
+  return "text-neon-pink";
+}
+
+function scoreBarBg(score: number): string {
+  if (score >= 75) return "bg-neon-green";
+  if (score >= 50) return "bg-neon-amber";
+  return "bg-neon-pink";
+}
 
 function scoreLabel(score: number): string {
   if (score >= 75) return "Strong consistency across channels";
@@ -25,46 +25,32 @@ function scoreLabel(score: number): string {
   return "Significant inconsistencies — needs attention";
 }
 
-function scoreBarColor(score: number): string {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 50) return "bg-amber-500";
-  return "bg-red-500";
-}
-
-function scoreTextColor(score: number): string {
-  if (score >= 75) return "text-emerald-400";
-  if (score >= 50) return "text-amber-400";
-  return "text-red-400";
-}
-
-// ─── Insight card ──────────────────────────────────────────────────────────
-
 function InsightCard({
   insight,
-  accentClass,
+  accentBorder,
+  bulletColor,
 }: {
   insight: BrandInsight;
-  accentClass: string;
+  accentBorder: string;
+  bulletColor: string;
 }) {
   return (
     <div
       className={cn(
-        "bg-card border border-border rounded-lg p-4 border-l-2",
-        accentClass
+        "terminal-card border-l-4",
+        accentBorder
       )}
     >
-      <h4 className="text-sm font-semibold text-zinc-100 mb-1.5">
-        {insight.title}
+      <h4 className="font-mono text-sm font-bold text-foreground mb-1.5 tracking-wider">
+        {insight.title.toUpperCase()}
       </h4>
-      <p className="text-sm text-zinc-400 leading-relaxed">
+      <p className="text-sm text-muted-foreground leading-relaxed">
         {insight.description}
       </p>
       <EvidenceBlock evidence={insight.evidence} />
     </div>
   );
 }
-
-// ─── Main section ──────────────────────────────────────────────────────────
 
 interface BrandPerceptionSectionProps {
   data: BrandPerception;
@@ -75,68 +61,68 @@ export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
 
   return (
     <div className="space-y-8">
-      {/* Hero summary card */}
-      <Card>
-        <CardContent className="pt-6 space-y-5">
-          {/* Summary */}
-          <p className="text-zinc-300 leading-relaxed">{data.summary}</p>
+      {/* Module header */}
+      <div>
+        <div className="module-header text-neon-green">Module 01</div>
+        <h2 className="font-mono text-neon-green text-xl font-bold tracking-wider">BRAND SNAPSHOT</h2>
+      </div>
 
-          {/* Tone badges */}
-          <div>
-            <p className="text-xs uppercase tracking-wider text-zinc-600 mb-2 font-medium">
-              Tone &amp; Identity
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {data.toneAndIdentity.map((tone, i) => (
-                <Badge key={i} variant="secondary" className="rounded-full font-medium">
-                  {tone}
-                </Badge>
-              ))}
-              {data.toneAndIdentity.length === 0 && (
-                <span className="text-zinc-600 text-sm italic">
-                  No tone signals identified
-                </span>
-              )}
-            </div>
-          </div>
+      {/* Summary card */}
+      <div className="terminal-card border-border hover:glow-green">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
+          <div className="flex-1 space-y-4">
+            <p className="text-foreground text-sm leading-relaxed">{data.summary}</p>
 
-          {/* Consistency score */}
-          <div>
-            <div className="flex items-end justify-between mb-2">
-              <p className="text-xs uppercase tracking-wider text-zinc-600 font-medium">
-                Consistency Score
-              </p>
-              <span className={cn("text-3xl font-bold leading-none tabular-nums", scoreTextColor(score))}>
-                {score}
-                <span className="text-sm font-normal text-zinc-600 ml-0.5">
-                  /100
-                </span>
-              </span>
-            </div>
-            <div className="w-full bg-zinc-800 rounded-full h-2.5 overflow-hidden">
-              <div
-                className={cn(
-                  "h-2.5 rounded-full transition-all duration-1000",
-                  scoreBarColor(score)
+            {/* Tone badges */}
+            <div>
+              <div className="font-mono text-[10px] text-neon-cyan tracking-widest mb-2">TONE & IDENTITY</div>
+              <div className="flex flex-wrap gap-2">
+                {data.toneAndIdentity.map((tone, i) => (
+                  <NeonBadge key={i} variant={i % 3 === 0 ? "cyan" : i % 3 === 1 ? "green" : "purple"}>
+                    {tone}
+                  </NeonBadge>
+                ))}
+                {data.toneAndIdentity.length === 0 && (
+                  <span className="text-muted-foreground text-sm italic">
+                    No tone signals identified
+                  </span>
                 )}
-                style={{ width: `${score}%` }}
-              />
+              </div>
             </div>
-            <p className="text-zinc-600 text-xs mt-1.5">{scoreLabel(score)}</p>
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Score */}
+          <div className="flex flex-col items-center justify-center min-w-[140px] p-4 border-2 border-neon-green/30 rounded-sm">
+            <div className="font-mono text-[10px] text-muted-foreground mb-1 tracking-widest">BRAND CLARITY</div>
+            <div className={cn("text-5xl font-mono font-bold count-glow", scoreColor(score))}>
+              <CountUp end={score} />
+            </div>
+            <div className="font-mono text-xs text-muted-foreground">/100</div>
+          </div>
+        </div>
+
+        {/* Score bar */}
+        <div className="mt-6">
+          <div className="w-full bg-secondary rounded-sm h-2.5 overflow-hidden">
+            <div
+              className={cn("h-2.5 rounded-sm transition-all duration-1000", scoreBarBg(score))}
+              style={{ width: `${score}%` }}
+            />
+          </div>
+          <p className="font-mono text-[10px] text-muted-foreground mt-1.5 tracking-wider">{scoreLabel(score).toUpperCase()}</p>
+        </div>
+      </div>
 
       {/* Strengths + Weak signals */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Strengths */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <h3 className="text-white font-semibold text-sm">
-              Perceived Strengths
+            <Target className="h-4 w-4 text-neon-green" />
+            <h3 className="font-mono text-neon-green text-sm font-bold tracking-wider">
+              PERCEIVED STRENGTHS
             </h3>
-            <span className="text-zinc-600 text-xs">
+            <span className="font-mono text-[10px] text-muted-foreground">
               ({data.perceivedStrengths.length})
             </span>
           </div>
@@ -145,11 +131,12 @@ export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
               <InsightCard
                 key={i}
                 insight={insight}
-                accentClass="border-l-emerald-600"
+                accentBorder="border-l-neon-green"
+                bulletColor="text-neon-green"
               />
             ))}
             {data.perceivedStrengths.length === 0 && (
-              <p className="text-zinc-600 text-sm italic">
+              <p className="text-muted-foreground text-sm italic font-mono">
                 No strengths identified.
               </p>
             )}
@@ -159,11 +146,11 @@ export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
         {/* Weak signals */}
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-            <h3 className="text-white font-semibold text-sm">
-              Weak or Confusing Signals
+            <AlertTriangle className="h-4 w-4 text-neon-amber" />
+            <h3 className="font-mono text-neon-amber text-sm font-bold tracking-wider">
+              GAPS DETECTED
             </h3>
-            <span className="text-zinc-600 text-xs">
+            <span className="font-mono text-[10px] text-muted-foreground">
               ({data.weakOrConfusingSignals.length})
             </span>
           </div>
@@ -172,11 +159,12 @@ export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
               <InsightCard
                 key={i}
                 insight={insight}
-                accentClass="border-l-amber-600"
+                accentBorder="border-l-neon-amber"
+                bulletColor="text-neon-amber"
               />
             ))}
             {data.weakOrConfusingSignals.length === 0 && (
-              <p className="text-zinc-600 text-sm italic">
+              <p className="text-muted-foreground text-sm italic font-mono">
                 No weak signals identified.
               </p>
             )}

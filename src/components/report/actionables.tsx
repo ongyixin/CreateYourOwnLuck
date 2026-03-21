@@ -1,15 +1,4 @@
-/**
- * Actionables section — Section 3 of the FitCheck report.
- *
- * Displays:
- * - What to Improve (amber)
- * - What to Change (red)
- * - What to Lean Into (emerald)
- * - Messaging Angles
- * - Copy Suggestions (before/after cards)
- *
- * Owned by: report agent
- */
+"use client";
 
 import {
   TrendingUp,
@@ -19,31 +8,14 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import NeonBadge from "@/components/neon-badge";
 import { EvidenceBlock } from "./evidence-block";
 import type { Actionables, Actionable } from "@/lib/types";
 
-// ─── Priority badge ────────────────────────────────────────────────────────
-
 function PriorityBadge({ priority }: { priority: Actionable["priority"] }) {
-  return (
-    <Badge
-      variant={
-        priority === "high"
-          ? "destructive"
-          : priority === "medium"
-            ? "warning"
-            : "secondary"
-      }
-      className="flex-shrink-0"
-    >
-      {priority}
-    </Badge>
-  );
+  const variant = priority === "high" ? "pink" : priority === "medium" ? "amber" : "cyan";
+  return <NeonBadge variant={variant}>{priority.toUpperCase()}</NeonBadge>;
 }
-
-// ─── Actionable card ───────────────────────────────────────────────────────
 
 function ActionableCard({
   item,
@@ -53,52 +25,44 @@ function ActionableCard({
   accentClass: string;
 }) {
   return (
-    <div
-      className={cn(
-        "bg-card border border-border rounded-lg p-4 border-l-2",
-        accentClass
-      )}
-    >
+    <div className={cn("terminal-card border-l-4", accentClass)}>
       <div className="flex items-start justify-between gap-3 mb-2">
-        <h4 className="text-zinc-100 text-sm font-semibold leading-snug">
-          {item.title}
+        <h4 className="font-mono text-foreground text-sm font-bold leading-snug tracking-wider">
+          {item.title.toUpperCase()}
         </h4>
         <PriorityBadge priority={item.priority} />
       </div>
-      <p className="text-zinc-400 text-sm leading-relaxed">{item.description}</p>
+      <p className="text-muted-foreground text-sm leading-relaxed">{item.description}</p>
       <EvidenceBlock evidence={item.evidence} />
     </div>
   );
 }
 
-// ─── Section group header ──────────────────────────────────────────────────
-
 function SectionHead({
   icon,
   label,
   count,
+  color,
 }: {
   icon: React.ReactNode;
   label: string;
   count: number;
+  color: string;
 }) {
   return (
     <div className="flex items-center gap-2 mb-4">
       {icon}
-      <h3 className="text-white font-semibold text-sm">{label}</h3>
-      <span className="text-zinc-600 text-xs">({count})</span>
+      <h3 className={cn("font-mono text-sm font-bold tracking-wider", color)}>{label}</h3>
+      <span className="font-mono text-[10px] text-muted-foreground">({count})</span>
     </div>
   );
 }
-
-// ─── Main section ──────────────────────────────────────────────────────────
 
 interface ActionablesSectionProps {
   data: Actionables;
 }
 
 export function ActionablesSection({ data }: ActionablesSectionProps) {
-  // Sort each group high → medium → low
   const order = { high: 0, medium: 1, low: 2 };
   const sorted = <T extends Actionable>(arr: T[]) =>
     [...arr].sort((a, b) => order[a.priority] - order[b.priority]);
@@ -111,17 +75,24 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
 
   return (
     <div className="space-y-10">
+      {/* Module header */}
+      <div>
+        <div className="module-header text-neon-amber">Module 03</div>
+        <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">RECOMMENDATIONS</h2>
+      </div>
+
       {/* What to Improve */}
       {improve.length > 0 && (
         <div>
           <SectionHead
-            icon={<TrendingUp className="h-4 w-4 text-amber-400" />}
-            label="What to Improve"
+            icon={<TrendingUp className="h-4 w-4 text-neon-amber" />}
+            label="WHAT TO IMPROVE"
             count={improve.length}
+            color="text-neon-amber"
           />
           <div className="space-y-3">
             {improve.map((item, i) => (
-              <ActionableCard key={i} item={item} accentClass="border-l-amber-600" />
+              <ActionableCard key={i} item={item} accentClass="border-l-neon-amber" />
             ))}
           </div>
         </div>
@@ -131,13 +102,14 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
       {change.length > 0 && (
         <div>
           <SectionHead
-            icon={<RefreshCw className="h-4 w-4 text-red-400" />}
-            label="What to Change"
+            icon={<RefreshCw className="h-4 w-4 text-neon-pink" />}
+            label="WHAT TO CHANGE"
             count={change.length}
+            color="text-neon-pink"
           />
           <div className="space-y-3">
             {change.map((item, i) => (
-              <ActionableCard key={i} item={item} accentClass="border-l-red-600" />
+              <ActionableCard key={i} item={item} accentClass="border-l-neon-pink" />
             ))}
           </div>
         </div>
@@ -147,13 +119,14 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
       {lean.length > 0 && (
         <div>
           <SectionHead
-            icon={<Rocket className="h-4 w-4 text-emerald-400" />}
-            label="What to Lean Into"
+            icon={<Rocket className="h-4 w-4 text-neon-green" />}
+            label="WHAT TO LEAN INTO"
             count={lean.length}
+            color="text-neon-green"
           />
           <div className="space-y-3">
             {lean.map((item, i) => (
-              <ActionableCard key={i} item={item} accentClass="border-l-emerald-600" />
+              <ActionableCard key={i} item={item} accentClass="border-l-neon-green" />
             ))}
           </div>
         </div>
@@ -163,30 +136,28 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
       {angles.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <MessageSquare className="h-4 w-4 text-violet-400" />
-            <h3 className="text-white font-semibold text-sm">
-              Recommended Messaging Angles
+            <MessageSquare className="h-4 w-4 text-neon-purple" />
+            <h3 className="font-mono text-neon-purple text-sm font-bold tracking-wider">
+              MESSAGING ANGLES
             </h3>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {angles.map((angle, i) => (
-              <Card key={i}>
-                <CardContent className="pt-4 pb-4 space-y-2">
-                  <p className="text-violet-300 text-sm font-semibold leading-snug">
-                    &ldquo;{angle.angle}&rdquo;
-                  </p>
-                  <p className="text-zinc-400 text-xs leading-relaxed">
-                    {angle.rationale}
-                  </p>
-                  {angle.exampleHeadline && (
-                    <div className="mt-2 bg-zinc-800/60 rounded px-3 py-2">
-                      <p className="text-zinc-200 text-xs font-medium">
-                        {angle.exampleHeadline}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <div key={i} className="terminal-card border-neon-purple/30 hover:glow-purple">
+                <p className="text-neon-purple font-mono text-sm font-bold leading-snug mb-2">
+                  &ldquo;{angle.angle}&rdquo;
+                </p>
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  {angle.rationale}
+                </p>
+                {angle.exampleHeadline && (
+                  <div className="mt-2 bg-secondary rounded-sm px-3 py-2">
+                    <p className="text-foreground text-xs font-mono">
+                      {angle.exampleHeadline}
+                    </p>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -196,44 +167,29 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
       {copy.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <ArrowRight className="h-4 w-4 text-violet-400" />
-            <h3 className="text-white font-semibold text-sm">Copy Suggestions</h3>
+            <ArrowRight className="h-4 w-4 text-neon-cyan" />
+            <h3 className="font-mono text-neon-cyan text-sm font-bold tracking-wider">COPY SUGGESTIONS</h3>
           </div>
           <div className="space-y-4">
             {copy.map((s, i) => (
-              <Card key={i} className="overflow-hidden">
-                {/* Placement label */}
-                <div className="px-4 py-2 bg-zinc-800/40 border-b border-zinc-800/60">
-                  <span className="text-zinc-400 text-xs font-semibold uppercase tracking-wide">
-                    {s.placement}
-                  </span>
+              <div key={i} className="terminal-card border-border">
+                <div className="font-mono text-[10px] text-neon-cyan tracking-widest mb-3">
+                  {s.placement.toUpperCase()}
                 </div>
-                <CardContent className="pt-4 space-y-3">
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {/* Before */}
-                    <div className="bg-red-950/20 border border-red-900/30 rounded-lg p-3">
-                      <p className="text-red-400/60 text-xs uppercase tracking-wider mb-1.5 font-medium">
-                        Before
-                      </p>
-                      <p className="text-zinc-300 text-sm leading-relaxed">
-                        {s.before}
-                      </p>
-                    </div>
-                    {/* After */}
-                    <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-3">
-                      <p className="text-emerald-400/60 text-xs uppercase tracking-wider mb-1.5 font-medium">
-                        After
-                      </p>
-                      <p className="text-zinc-300 text-sm leading-relaxed">
-                        {s.after}
-                      </p>
-                    </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-secondary rounded-sm border border-neon-pink/20">
+                    <div className="font-mono text-[10px] text-neon-pink tracking-widest mb-1">✕ BEFORE</div>
+                    <p className="text-[12px] text-muted-foreground italic">{s.before}</p>
                   </div>
-                  <p className="text-zinc-500 text-xs leading-relaxed">
-                    {s.rationale}
-                  </p>
-                </CardContent>
-              </Card>
+                  <div className="p-3 bg-secondary rounded-sm border border-neon-green/30">
+                    <div className="font-mono text-[10px] text-neon-green tracking-widest mb-1">✓ AFTER</div>
+                    <p className="text-[12px] text-foreground">{s.after}</p>
+                  </div>
+                </div>
+                <p className="text-muted-foreground text-xs leading-relaxed mt-3">
+                  {s.rationale}
+                </p>
+              </div>
             ))}
           </div>
         </div>

@@ -20,45 +20,43 @@ export function StepIndicator({ steps, currentStep }: StepIndicatorProps) {
 
         return (
           <div key={i} className="flex items-center">
-            {/* Connector line before (skip for first) */}
             {i > 0 && (
               <div
                 className={cn(
                   "h-px w-8 transition-colors sm:w-12",
-                  i <= currentStep ? "bg-violet-500" : "bg-zinc-800"
+                  i <= currentStep ? "bg-neon-green" : "bg-border"
                 )}
               />
             )}
 
-            {/* Step circle */}
             <div className="flex flex-col items-center">
               <div
                 className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold transition-all",
+                  "flex h-8 w-8 items-center justify-center rounded-sm border-2 font-mono text-xs font-bold transition-all",
                   isComplete
-                    ? "border-violet-500 bg-violet-500 text-white"
+                    ? "border-neon-green bg-neon-green text-primary-foreground"
                     : isCurrent
-                      ? "border-violet-500 bg-transparent text-violet-400"
-                      : "border-zinc-700 bg-transparent text-zinc-600"
+                      ? "border-neon-green bg-transparent text-neon-green"
+                      : "border-border bg-transparent text-muted-foreground"
                 )}
               >
                 {isComplete ? (
                   <Check className="h-3.5 w-3.5" />
                 ) : (
-                  <span>{i + 1}</span>
+                  <span>{String(i + 1).padStart(2, "0")}</span>
                 )}
               </div>
               <span
                 className={cn(
-                  "mt-1.5 hidden text-xs sm:block",
+                  "mt-1.5 hidden text-[10px] font-mono tracking-wider sm:block",
                   isCurrent
-                    ? "font-medium text-zinc-200"
+                    ? "font-medium text-foreground"
                     : isComplete
-                      ? "text-zinc-400"
-                      : "text-zinc-600"
+                      ? "text-neon-green"
+                      : "text-muted-foreground"
                 )}
               >
-                {step.label}
+                {step.label.toUpperCase()}
               </span>
             </div>
           </div>

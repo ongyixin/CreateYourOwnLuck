@@ -1,14 +1,7 @@
 "use client";
 
-/**
- * Sticky report header showing company name, URL, generated date,
- * and export/share CTAs.
- *
- * Owned by: report agent
- */
-
-import { ExternalLink, Share2, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ExternalLink, Share2, Download, Copy } from "lucide-react";
+import AnimatedLogo from "@/components/animated-logo";
 import type { FitCheckReport } from "@/lib/types";
 
 interface ReportHeaderProps {
@@ -23,64 +16,55 @@ export function ReportHeader({ report }: ReportHeaderProps) {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-      {/* Left: brand + company */}
       <div className="flex items-center gap-3 min-w-0">
-        {/* FitCheck wordmark */}
-        <div className="flex items-center gap-0.5 flex-shrink-0">
-          <span className="text-violet-400 font-bold text-base tracking-tight">
-            Fit
-          </span>
-          <span className="text-white font-bold text-base tracking-tight">
-            Check
-          </span>
-        </div>
+        <AnimatedLogo size={18} />
+        <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+          FITCHECK<span className="blink">_</span>
+        </span>
 
-        <div className="w-px h-5 bg-zinc-700/60 flex-shrink-0" />
+        <div className="w-px h-5 bg-border flex-shrink-0" />
 
-        {/* Company info */}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <h1 className="text-white font-semibold text-sm truncate">
-              {report.companyName}
+            <h1 className="text-foreground font-mono font-bold text-sm truncate tracking-wider">
+              {report.companyName.toUpperCase()}
             </h1>
             <a
               href={report.websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-600 hover:text-violet-400 transition-colors flex-shrink-0"
+              className="text-muted-foreground hover:text-neon-green transition-colors flex-shrink-0"
               aria-label="Visit company website"
             >
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
-          <p className="text-zinc-600 text-xs">Generated {generatedDate}</p>
+          <p className="text-muted-foreground font-mono text-[10px] tracking-widest">
+            GENERATED {generatedDate.toUpperCase()}
+          </p>
         </div>
       </div>
 
-      {/* Right: actions */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-zinc-500 hover:text-zinc-200 h-8 px-3"
+        <button
+          className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm hover:border-neon-green hover:text-neon-green transition-all font-mono text-[10px] tracking-widest text-muted-foreground"
           onClick={() => {
             navigator.clipboard.writeText(window.location.href).catch(() => {});
           }}
           title="Copy link"
         >
-          <Share2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline text-xs">Share</span>
-        </Button>
+          <Copy className="h-3 w-3" />
+          <span className="hidden sm:inline">SHARE</span>
+        </button>
 
-        <Button
-          size="sm"
-          className="gap-1.5 h-8 px-3 text-xs"
+        <button
+          className="flex items-center gap-1.5 h-8 px-3 bg-neon-green text-primary-foreground rounded-sm font-mono text-[10px] tracking-widest font-bold hover:glow-green transition-all"
           onClick={() => window.print()}
           title="Export report"
         >
-          <Download className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Export</span>
-        </Button>
+          <Download className="h-3 w-3" />
+          <span className="hidden sm:inline">EXPORT</span>
+        </button>
       </div>
     </div>
   );
