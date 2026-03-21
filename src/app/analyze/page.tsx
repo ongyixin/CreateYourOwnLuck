@@ -236,6 +236,8 @@ export default function AnalyzePage() {
                 data={{ competitorUrls: form.competitorUrls }}
                 errors={competitorErrors}
                 onChange={(d) => setForm((f) => ({ ...f, ...d }))}
+                companyName={form.companyName}
+                websiteUrl={form.websiteUrl}
               />
             )}
             {step === 3 && (

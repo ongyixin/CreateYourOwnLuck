@@ -6,6 +6,58 @@
 
 @layer base {
   :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+
+    --primary: 153 70% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 93%;
+    --secondary-foreground: 0 0% 8%;
+
+    --muted: 0 0% 88%;
+    --muted-foreground: 0 0% 42%;
+
+    --accent: 330 70% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --warning: 45 88% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 83%;
+    --input: 0 0% 92%;
+    --ring: 153 70% 30%;
+
+    --radius: 0.25rem;
+
+    --neon-green: 153 70% 30%;
+    --neon-pink: 330 70% 42%;
+    --neon-amber: 45 88% 38%;
+    --neon-cyan: 185 72% 32%;
+    --neon-purple: 270 62% 46%;
+    --neon-red: 0 70% 48%;
+    --neon-blue: 220 68% 46%;
+
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+
+    --glow-green: 0 0 8px hsl(153 70% 30% / 0.2), 0 0 20px hsl(153 70% 30% / 0.06);
+    --glow-pink: 0 0 8px hsl(330 70% 42% / 0.2), 0 0 20px hsl(330 70% 42% / 0.06);
+    --glow-amber: 0 0 8px hsl(45 88% 38% / 0.2), 0 0 20px hsl(45 88% 38% / 0.06);
+    --glow-cyan: 0 0 8px hsl(185 72% 32% / 0.2), 0 0 20px hsl(185 72% 32% / 0.06);
+    --glow-purple: 0 0 8px hsl(270 62% 46% / 0.2), 0 0 20px hsl(270 62% 46% / 0.06);
+  }
+
+  .dark {
     --background: 0 0% 4%;
     --foreground: 0 0% 92%;
 
@@ -37,8 +89,6 @@
     --input: 0 0% 12%;
     --ring: 153 100% 50%;
 
-    --radius: 0.25rem;
-
     --neon-green: 153 100% 50%;
     --neon-pink: 330 100% 60%;
     --neon-amber: 45 100% 55%;
@@ -46,9 +96,6 @@
     --neon-purple: 270 100% 65%;
     --neon-red: 0 100% 55%;
     --neon-blue: 220 100% 60%;
-
-    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
-    --font-sans: 'Inter', system-ui, sans-serif;
 
     --glow-green: 0 0 15px hsl(153 100% 50% / 0.4), 0 0 40px hsl(153 100% 50% / 0.1);
     --glow-pink: 0 0 15px hsl(330 100% 60% / 0.4), 0 0 40px hsl(330 100% 60% / 0.1);
@@ -70,6 +117,7 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   ::-webkit-scrollbar {

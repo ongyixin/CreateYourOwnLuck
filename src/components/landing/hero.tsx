@@ -11,6 +11,7 @@ import {
 import AnimatedLogo from "@/components/animated-logo";
 import ScanlineOverlay from "@/components/scanline-overlay";
 import CursorBloom from "@/components/cursor-bloom";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const Section = ({ children, className = "", direction = "up" }: {
   children: React.ReactNode; className?: string; direction?: "up" | "left" | "right" | "scale";
@@ -103,6 +104,7 @@ export default function Hero() {
             <span>|</span>
             <span>v1.0.0</span>
           </div>
+          <ThemeToggle />
           <Link
             href="/analyze"
             className="bg-neon-green text-primary-foreground font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider hover:glow-green transition-all active:scale-95"
@@ -157,14 +159,20 @@ export default function Hero() {
           className="mt-8 flex flex-wrap justify-center gap-3"
         >
           {[
-            { icon: Search, label: "BRAND AUDIT", color: "text-neon-green" },
-            { icon: Globe, label: "COMPETITOR MAP", color: "text-neon-pink" },
-            { icon: Users, label: "AI PERSONAS", color: "text-neon-cyan" },
-            { icon: Sparkles, label: "RECOMMENDATIONS", color: "text-neon-amber" },
+            { icon: Search, label: "BRAND AUDIT", color: "text-neon-green", tooltip: "Detects your brand tone, messaging strengths, and confusing signals from your web presence." },
+            { icon: Globe, label: "COMPETITOR MAP", color: "text-neon-pink", tooltip: "Shows how your positioning stacks up against competitors with side-by-side gap analysis." },
+            { icon: Users, label: "AI PERSONAS", color: "text-neon-cyan", tooltip: "AI-generated customer profiles built from real web data — segments you can actually target." },
+            { icon: Sparkles, label: "RECOMMENDATIONS", color: "text-neon-amber", tooltip: "Actionable before/after copy suggestions and messaging angles to sharpen your positioning." },
           ].map((f) => (
-            <div key={f.label} className="flex items-center gap-2 font-mono text-xs text-muted-foreground border border-border rounded-sm px-3 py-1.5">
-              <f.icon className={`w-3.5 h-3.5 ${f.color}`} />
-              {f.label}
+            <div key={f.label} className="relative group">
+              <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground border border-border rounded-sm px-3 py-1.5 cursor-default">
+                <f.icon className={`w-3.5 h-3.5 ${f.color}`} />
+                {f.label}
+              </div>
+              <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 w-52 rounded-sm border border-border bg-background/95 backdrop-blur-sm px-3 py-2 text-xs font-mono text-muted-foreground leading-relaxed shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-b-4 border-b-border" />
+                {f.tooltip}
+              </div>
             </div>
           ))}
         </motion.div>

@@ -1,157 +1,109 @@
-One-line pitch
-FitCheck helps companies understand how their brand is currently perceived, who their real ideal customers are, and how to sharpen their positioning using AI grounded in live web data.
-Core concept
-Companies often have product materials, websites, ads, demos, and messaging, but do not have a clear picture of:
-what their branding currently signals
-which audience segments they are actually attracting
-whether their messaging is consistent
-how they compare against competitors
-what they should change to better reach their ideal customers
-FitCheck solves this by combining:
-company-uploaded materials
-competitor and market web data
-AI analysis
-to generate a branding and ICP assessment with concrete recommendations.
+Focus Group Mode — Technical Feature Description
 
-Problem
-Startups and businesses often struggle with branding and positioning because they rely on instinct, internal opinions, or outdated market research.
-As a result, they may not know:
-whether their brand is clear or confusing
-whether they are appealing to the right customer segment
-what differentiates them from competitors
-what messaging changes would improve conversion
-where to find the audiences most likely to buy
-Most existing tools are static or generic. FitCheck is different because it uses fresh web data alongside the company’s own materials.
+Overview
+Focus Group Mode is a multi-agent orchestration layer built on top of FitCheck's existing persona pipeline. Rather than isolated single-persona interviews, it spins up a structured discussion session between 4–6 simultaneously active AI agents — each grounded in the same scraped web evidence as the core ICP generation flow — and extracts quantified signals from the conversation that map directly to go-to-market decisions.
+Each persona is weighted against real-world market proportions, drawn from public workforce data, LinkedIn audience distributions, and competitor review volume. This means every agent's response carries a market weight — turning a simulated focus group into a weighted PMF estimate against your actual addressable market.
 
-Target users
-For:
-startups
-indie hackers
-SaaS products
-small businesses
-founders validating positioning
-teams refining branding and ICP
-products entering a new market or audience segment
+Architecture
+Each agent is instantiated with a distinct persona profile (goals, pains, objections, buying triggers, budget) plus the same brand/competitor evidence context. A lightweight orchestration layer manages turn order, inter-agent referencing, and response synthesis. Market weights are assigned at session initialisation by querying public workforce and industry data against the scraped brand context to estimate segment sizes within the relevant category.
+One agent is always designated a near-miss adjacent profile — someone outside the core ICP whose conversion represents genuine addressable market expansion, weighted accordingly.
+Sessions run in three phases: unprompted reaction (agents respond to the product stimulus cold), directed questioning (founder probes specific objections or claims), and synthesis (the orchestrator resolves the session into scored, market-weighted outputs).
 
-Product flow
-User input
-The company uploads or links:
-website / landing page
-product mockups
-adverts / marketing assets
-demo video
-pitch deck
-product docs
-GitHub repo
-optional competitor links
-What the product does
-FitCheck analyzes the company’s own materials and combines them with live web data to determine:
-what the brand currently signals
-what audience segments it appears most aligned with
-how competitors position themselves
-what messaging gaps or inconsistencies exist
-what kinds of customers are most likely to convert
-Output
-The company receives:
-1. Branding assessment
-current tone and identity
-perceived strengths
-weak or confusing signals
-consistency across materials
-2. ICP assessment
-likely ideal customer profiles
-audience segments ranked by fit
-inferred pain points, motivations, and buying triggers
-3. Brand direction actionables
-what to improve
-what to change
-what to lean into
-recommended messaging angles
-homepage / ad / copy suggestions
-4. Customer and lead suggestions
-relevant customer types
-communities where they hang out
-companies or leads to target
-creators, channels, or ecosystems worth reaching
-5. Bonus: ICP Studio
-AI-generated customer personas grounded in web evidence
-company can test messaging, landing pages, or product ideas against them
-2–3 fictional but evidence-backed customer personas
-Each persona includes name, AI-generated photo, psychographics, pain points, and buying triggers
-Simulated 5-second reactions to the homepage or pitch
-Pain-point matching to identify gaps between current branding and customer priorities
-Synthetic focus group / interview mode for testing messaging and positioning
+Outputs That Connect to Business Decisions
+Market-weighted PMF score — a single conversion likelihood number adjusted for how large each persona's real-world segment actually is, giving a defensible hypothesis for CAC/LTV modelling before any ad spend
+ICP priority ranking — segments ranked by conversion likelihood × market size, telling a founder who to acquire first
+Adjacent segment expansion estimate — quantifies the revenue sitting outside the core ICP and what specific objections need closing to unlock it
+Objection frequency ranking — the top blockers weighted by the market share of the personas raising them, so a niche objection from a small segment doesn't outrank a mainstream one
+Consensus signals — claims that landed across all profiles, adjusted for market weight, becoming the highest-confidence inputs for homepage copy and paid creative
+Dead weight features — what generated no response, informing roadmap deprioritisation
+The output is a structured Focus Group Report that gives a founder the same directional signal a qualitative research engagement would — derived from live web data, delivered in under five minutes. All market weight estimates are flagged as directional and sourced from public data, not primary research.
 
-Where Apify fits in the stack
-Apify powers the web data collection and automation layer.
-It can be used to:
-scrape company website content
-scrape competitor websites
-collect reviews, mentions, public discussions, and directory listings
-gather market/category signals
-monitor brand mentions over time
-refresh reports on a schedule
-Workflow role
-User input → Apify collects and structures web data → backend normalizes it → AI analyzes it → BrandSignal generates a report
-Apify is especially useful here for:
-collecting fresh public web data
-automating repeated crawls
-storing structured outputs
-triggering downstream workflows
+Example Session
 
-Core product engine
-1. Company material ingestion
-Collect:
-uploaded files
-URLs
-company information
-optional competitors
-optional business goal
-2. Web intelligence layer
-Using Apify, collect:
-public company page data
-competitor signals
-market/category signals
-audience language
-reviews, discussions, and mentions
-3. AI synthesis layer
-Use LLMs to generate:
-brand perception analysis
-ICP hypotheses
-strengths and weaknesses
-recommended changes
-synthetic persona reactions
+Input: Founder pastes linear.app
+FitCheck crawls Linear's site, pricing, competitor pages (Jira, Asana, Height), and Reddit threads where people discuss project management tooling. Personas and market weights are generated from that evidence plus public workforce distribution data.
 
-Why this is a strong hackathon idea
-This fits the challenge well because it is a useful web app powered by real web data.
-It is compelling because:
-branding and ICP are real pain points for startups
-the output is practical and immediately useful
-the web-data angle is essential, not decorative
-the result is easy to demo visually
-it combines AI analysis with market intelligence
+The Room
+Agent
+Profile
+Market Weight
+Marcus
+Engineering lead, 40-person Series A. Uses Jira, hates it, hasn't switched.
+18% of TAM
+Priya
+Head of Product, bootstrapped SaaS. Manages sprints in Notion, feeling the pain.
+22% of TAM
+David
+CTO, 12-person seed-stage. Actively evaluating tools, price-sensitive.
+31% of TAM
+Sandra
+VP Eng, 200-person scaleup. Needs enterprise controls, SSO, audit logs. (Adjacent)
+11% of TAM
+Jordan
+Developer at an agency. Tried Linear, went back to Trello. (Skeptic)
+18% of TAM
 
-MVP scope
-Must-have
-landing page
-company onboarding form
-upload materials / enter website
-add competitor links
-generate branding + ICP report
-show recommendations and lead/community suggestions
-Nice-to-have
-recurring refreshes
-competitor comparison view
-brand consistency score
-synthetic customer testing
-downloadable report
 
-Suggested tech stack
-Frontend: Next.js
-Backend: FastAPI or Node.js
-AI layer: OpenAI / Anthropic
-Database: Postgres
-Vector storage: pgvector
-Web data layer: Apify
-Async pipeline: webhooks + job queue
+Session
+Founder drops Linear's homepage headline into the room:
+"Linear is the new standard for modern software development teams."
+Marcus: "That actually resonates. 'Modern' is doing a lot of work here but I know immediately it's not for my manager, it's for me."
+Jordan: "I heard that two years ago. I tried it. The issue wasn't the product, it was that my whole team didn't adopt it. Ends up being a solo tool."
+Priya: "That's my concern too. Notion works because everyone's already in it. Switching cost isn't the price, it's the re-onboarding."
+David: "What's the pricing look like scaled to 15 engineers?"
+Founder pastes the pricing page.
+David: "$8 per seat is fine at my size. I'd pull the trigger if there's a decent free trial."
+Sandra: "I don't see anything about SSO or permissions here. That's a non-starter for us. I'd need to loop in IT and that conversation dies without a security page."
+Jordan: "This is clearly built for devs who control their own tools. The moment procurement gets involved you're in a different product category."
+
+Focus Group Report
+MARKET-WEIGHTED CONVERSION ESTIMATE
+
+Agent    Profile                  Weight    Likelihood    Weighted Signal
+Marcus   Eng Lead, Series A       18%       82/100        14.8
+Priya    Head of Product, SMB     22%       61/100        13.4
+David    CTO, Seed                31%       74/100        22.9
+Sandra   VP Eng, Scaleup          11%       23/100        2.5
+Jordan   Dev, Agency              18%       39/100        7.0
+
+WEIGHTED PMF SCORE     60.6 / 100
+
+ICP PRIORITY RANKING (conversion likelihood × market weight)
+1. David   — CTO, Seed          highest weighted signal, largest segment
+2. Marcus  — Eng Lead, Series A — high intent, needs urgency trigger
+3. Priya   — Head of Product    — interested, blocked by adoption risk
+
+ADJACENT SEGMENT SIGNAL
+Sandra (11% of TAM) is currently unaddressed by the homepage.
+A dedicated /enterprise or /security page would unlock this
+segment without changing core product positioning.
+Estimated reachable revenue impact: material, requires separate
+sales motion.
+
+TOP OBJECTIONS (weighted by segment size)
+1. Team adoption risk          — Priya + Jordan = 40% of TAM
+2. Missing enterprise controls — Sandra = 11% of TAM
+3. Switching cost framing      — 40% of TAM, correlated with #1
+
+CONSENSUS SIGNALS (what landed across the room)
+— "Modern" read as dev-led, not PM-led — positive across core ICP
+— Per-seat pricing felt fair at seed/Series A scale
+— Speed and keyboard-first UX referenced unprompted by 3 agents
+
+DEAD WEIGHT
+— "New standard" framing dismissed as marketing noise by 4/5 agents
+— Logo strip generated no response across any segment
+
+RECOMMENDED ACTIONS
+1. Lead with team adoption proof — affects 40% of your TAM
+2. Build /enterprise page to unlock Sandra's segment
+3. Replace "new standard" with a concrete outcome claim
+4. Clarify free trial terms above the fold — blocking David's segment,
+   your highest-weighted conversion opportunity
+
+⚠ Market weights estimated from public workforce and LinkedIn
+audience data. Treat as directional signal, not primary research.
+Validate with real customer interviews before major spend decisions.
+
+
 

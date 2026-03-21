@@ -10,7 +10,7 @@ export const ACTORS = {
   WEBSITE_CRAWLER: "apify/website-content-crawler",
   GOOGLE_SEARCH: "apify/google-search-scraper",
   TWEET_SCRAPER: "apidojo/tweet-scraper",
-  G2_SCRAPER: "misceres/g2-scraper",
+  G2_SCRAPER: "zen-studio/g2-reviews-scraper",
   TRUSTPILOT_SCRAPER: "automation-lab/trustpilot-scraper",
   JOB_SCRAPER: "bebity/linkedin-jobs-scraper",
   YOUTUBE_SCRAPER: "streamers/youtube-scraper",
@@ -82,14 +82,17 @@ export function buildTweetSearchInput(
 }
 
 /**
- * Input for misceres/g2-scraper.
- * Scrapes structured reviews from G2 for the given company search term.
+ * Input for zen-studio/g2-reviews-scraper.
+ * Requires a direct G2 product page URL. Derives a best-effort slug from
+ * the company name (lowercase, spaces → hyphens). G2 resolves renamed slugs
+ * automatically so approximate slugs usually still work.
  */
 export function buildG2Input(companyName: string): Record<string, unknown> {
+  const slug = companyName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   return {
-    searchQuery: companyName,
-    maxReviews: 15,
-    startUrls: [],
+    url: `https://www.g2.com/products/${slug}/reviews`,
+    limit: 15,
+    sortOrder: "most_recent",
   };
 }
 

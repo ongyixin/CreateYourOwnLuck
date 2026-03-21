@@ -176,10 +176,12 @@ export function normalizeMentions(items: unknown[]): PublicMention[] {
 interface RawG2Review {
   url?: string;
   title?: string;
+  // zen-studio/g2-reviews-scraper uses starRating; older actors used rating
+  starRating?: number;
   rating?: number;
   reviewerTitle?: string;
-  pros?: string;
-  cons?: string;
+  // zen-studio/g2-reviews-scraper uses text; older actors used review/body
+  text?: string;
   review?: string;
   body?: string;
   date?: string;
@@ -194,15 +196,13 @@ export function normalizeG2Reviews(items: unknown[]): StructuredReview[] {
 
   for (const raw of items.slice(0, 15)) {
     const item = raw as RawG2Review;
-    const reviewText = item.review ?? item.body ?? "";
+    const reviewText = item.text ?? item.review ?? item.body ?? "";
     if (!reviewText) continue;
 
     reviews.push({
       platform: "g2",
-      rating: item.rating ?? 0,
+      rating: item.starRating ?? item.rating ?? 0,
       title: item.title,
-      pros: item.pros ? truncate(item.pros, 200) : undefined,
-      cons: item.cons ? truncate(item.cons, 200) : undefined,
       reviewText: truncate(reviewText, 300),
       reviewerRole: item.reviewerTitle,
       date: item.date,
