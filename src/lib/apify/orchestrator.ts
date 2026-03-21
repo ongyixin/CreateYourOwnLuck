@@ -57,22 +57,24 @@ const COMPANY_MAX_PAGES = 8;
 /** Max pages to crawl per competitor site. */
 const COMPETITOR_MAX_PAGES = 4;
 
+// ─── Memory limits ────────────────────────────────────────────────────────────
+
+/**
+ * The website-content-crawler container bundles full browser binaries (xvfb +
+ * Playwright) even for Cheerio runs. It needs at least 1024 MB to start.
+ */
+const CRAWLER_MEMORY_COMPANY_MB = 1024;
+const CRAWLER_MEMORY_COMPETITOR_MB = 1024;
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
  * Orchestrate all Apify scraping for a FitCheck analysis job.
  *
- * Runs the following in parallel:
- *   1. Company website crawl
- *   2. Each competitor crawl (independent)
- *   3. Google search queries (mentions + news)
- *   4. Twitter/X mentions
- *   5. G2 structured reviews
- *   6. Trustpilot structured reviews
- *   7. LinkedIn job postings
- *   8. YouTube video search
- *   9. Product Hunt entries
- *  10. Google autocomplete suggestions
+ * Website crawlers are run sequentially (company → competitors one-by-one)
+ * to avoid hitting the free-plan concurrent memory ceiling.
+ * All lighter actors (search, reviews, social, enrichment) run in parallel
+ * while the crawlers are executing.
  *
  * Returns a fully-normalized ScrapedData. Any individual failure is captured
  * in `warnings` rather than thrown.
@@ -87,18 +89,7 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   /** Resolved empty array used as a no-op placeholder for skipped tasks. */
   const SKIPPED: Promise<unknown[]> = Promise.resolve([]);
 
-  // ── Build all tasks ────────────────────────────────────────────────────────
-
-  const companyCrawlTask = runActor(
-    ACTORS.WEBSITE_CRAWLER,
-    buildWebsiteCrawlInput(request.websiteUrl, COMPANY_MAX_PAGES),
-    120,
-    512
-  );
-
-  const competitorCrawlTasks = competitorUrls.map((url) =>
-    runActor(ACTORS.WEBSITE_CRAWLER, buildWebsiteCrawlInput(url, COMPETITOR_MAX_PAGES), 120, 256)
-  );
+  // ── Kick off lightweight tasks in parallel immediately ─────────────────────
 
   const searchQueries = buildSearchQueries(request.companyName, competitorUrls);
   const searchTask = selected.has("google_search")
@@ -138,35 +129,54 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     ? runActor(ACTORS.AUTOCOMPLETE_SCRAPER, buildAutocompleteInput(request.companyName))
     : SKIPPED;
 
-  // ── Run everything in parallel ─────────────────────────────────────────────
-
-  // Flatten competitor tasks so we can use a single Promise.allSettled call.
-  // We track their count to split the results back out afterwards.
-  const competitorCount = competitorCrawlTasks.length;
-
-  const allResults = await Promise.allSettled([
-    companyCrawlTask,          // index 0
-    ...competitorCrawlTasks,   // indices 1 … competitorCount
-    searchTask,                // competitorCount + 1
-    tweetTask,                 // competitorCount + 2
-    g2Task,                    // competitorCount + 3
-    trustpilotTask,            // competitorCount + 4
-    jobTask,                   // competitorCount + 5
-    youtubeTask,               // competitorCount + 6
-    productHuntTask,           // competitorCount + 7
-    autocompleteTask,          // competitorCount + 8
+  const lightweightResults = Promise.allSettled([
+    searchTask,      // 0
+    tweetTask,       // 1
+    g2Task,          // 2
+    trustpilotTask,  // 3
+    jobTask,         // 4
+    youtubeTask,     // 5
+    productHuntTask, // 6
+    autocompleteTask,// 7
   ]);
 
-  const companyResult      = allResults[0];
-  const competitorResults  = allResults.slice(1, 1 + competitorCount);
-  const searchResult       = allResults[1 + competitorCount];
-  const tweetResult        = allResults[2 + competitorCount];
-  const g2Result           = allResults[3 + competitorCount];
-  const trustpilotResult   = allResults[4 + competitorCount];
-  const jobResult          = allResults[5 + competitorCount];
-  const youtubeResult      = allResults[6 + competitorCount];
-  const productHuntResult  = allResults[7 + competitorCount];
-  const autocompleteResult = allResults[8 + competitorCount];
+  // ── Run crawlers sequentially to stay within concurrent memory limits ───────
+  // Each website-content-crawler container needs ~1 GB just to start (it bundles
+  // Playwright + xvfb). Running them in parallel would exceed the free-plan cap.
+
+  const companyResult = await Promise.allSettled([
+    runActor(
+      ACTORS.WEBSITE_CRAWLER,
+      buildWebsiteCrawlInput(request.websiteUrl, COMPANY_MAX_PAGES),
+      180,
+      CRAWLER_MEMORY_COMPANY_MB
+    ),
+  ]).then((r) => r[0]);
+
+  const competitorResults: PromiseSettledResult<unknown[]>[] = [];
+  for (const url of competitorUrls) {
+    const result = await Promise.allSettled([
+      runActor(
+        ACTORS.WEBSITE_CRAWLER,
+        buildWebsiteCrawlInput(url, COMPETITOR_MAX_PAGES),
+        180,
+        CRAWLER_MEMORY_COMPETITOR_MB
+      ),
+    ]).then((r) => r[0]);
+    competitorResults.push(result);
+  }
+
+  // ── Collect lightweight results ────────────────────────────────────────────
+
+  const lw = await lightweightResults;
+  const searchResult       = lw[0];
+  const tweetResult        = lw[1];
+  const g2Result           = lw[2];
+  const trustpilotResult   = lw[3];
+  const jobResult          = lw[4];
+  const youtubeResult      = lw[5];
+  const productHuntResult  = lw[6];
+  const autocompleteResult = lw[7];
 
   // ── Company pages ──────────────────────────────────────────────────────────
 
@@ -234,7 +244,12 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     const normalized = normalizeTweets(tweetResult.value);
     socialMentions = normalized.length > 0 ? normalized : undefined;
     if (normalized.length === 0) {
-      warnings.push("Twitter/X scrape returned 0 mentions");
+      const rawCount = (tweetResult.value as unknown[]).length;
+      warnings.push(
+        rawCount === 0
+          ? "Twitter/X scrape returned 0 tweets (actor returned no results)"
+          : `Twitter/X scrape returned 0 mentions after filtering (${rawCount} raw tweets discarded)`
+      );
     }
   } else if (tweetResult?.status === "rejected") {
     warnings.push(`Twitter/X scrape failed: ${stringifyError(tweetResult.reason)}`);
