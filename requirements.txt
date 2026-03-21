@@ -1,0 +1,20 @@
+# Web scraping
+apify-client==2.9.0
+
+# AI SDKs
+openai==0.27.8
+anthropic==0.3.0
+
+# Data validation
+pydantic==1.10.9
+
+# Async processing
+fastapi==0.100.0
+uvicorn==0.23.2
+
+# Database
+psycopg2-binary==2.9.8
+
+# Development tools
+black==23.9.1
+pytest==7.4.2
