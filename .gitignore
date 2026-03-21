@@ -38,3 +38,7 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# AI IDE settings
+.claude/
+.cursor/
