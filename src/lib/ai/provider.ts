@@ -6,7 +6,7 @@
 //          generateAllSections
 // ============================================================
 
-import { generateText, Output } from 'ai';
+import { generateObject } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -80,14 +80,14 @@ function getModel() {
 // ============================================================
 
 async function runGenerate<T>(schema: ZodSchema<T>, prompt: string): Promise<T> {
-  const result = await generateText({
+  const result = await generateObject({
     model: getModel() as any,
-    output: Output.object({ schema }),
+    schema,
     system: SYSTEM_PROMPT,
     prompt,
     temperature: 0.4,
   });
-  return result.output as T;
+  return result.object;
 }
 
 // ============================================================

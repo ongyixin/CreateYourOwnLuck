@@ -215,7 +215,7 @@ export async function generatePersonaFlipQuestion(
     system: systemPrompt,
     messages: [{ role: 'user', content: userContent }],
     temperature: 0.7,
-    maxOutputTokens: 256,
+    maxOutputTokens: 1024,
   });
 
   return {

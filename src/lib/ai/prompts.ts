@@ -241,7 +241,7 @@ const PersonaSchema = z.object({
     .min(1)
     .max(3)
     .describe('Specific gaps between what the brand communicates and what this persona actually needs'),
-  evidence: z.array(EvidenceSchema).min(1).describe('Data signals that informed this persona'),
+  evidence: z.array(EvidenceSchema).describe('Data signals that informed this persona'),
 });
 
 export const IcpStudioSchema = z.object({
