@@ -19,7 +19,8 @@ import {
   Briefcase,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
+import NeonBadge from "@/components/neon-badge";
+import CountUp from "@/components/count-up";
 import { cn } from "@/lib/utils";
 import type { ProgressStage, PipelineStage, StageStatus } from "@/lib/types";
 
@@ -38,9 +39,10 @@ const STAGE_ICONS: Record<PipelineStage, React.ElementType> = {
   build_report: FileText,
 };
 
-const STAGE_GROUPS: { label: string; stages: PipelineStage[] }[] = [
+const STAGE_GROUPS: { label: string; stages: PipelineStage[]; color: string }[] = [
   {
-    label: "Data Collection",
+    label: "DATA COLLECTION",
+    color: "text-neon-green",
     stages: [
       "crawl_company",
       "crawl_competitors",
@@ -51,7 +53,8 @@ const STAGE_GROUPS: { label: string; stages: PipelineStage[] }[] = [
     ],
   },
   {
-    label: "AI Analysis",
+    label: "AI ANALYSIS",
+    color: "text-neon-cyan",
     stages: [
       "analyze_brand",
       "analyze_icp",
@@ -61,36 +64,34 @@ const STAGE_GROUPS: { label: string; stages: PipelineStage[] }[] = [
     ],
   },
   {
-    label: "Report",
+    label: "REPORT",
+    color: "text-neon-amber",
     stages: ["build_report"],
   },
 ];
 
 function StageStatusIcon({ status }: { status: StageStatus }) {
   if (status === "running") {
-    return (
-      <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-    );
+    return <Loader2 className="h-4 w-4 animate-spin text-neon-cyan" />;
   }
   if (status === "complete") {
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20">
-        <Check className="h-3 w-3 text-emerald-400" />
+      <div className="flex h-5 w-5 items-center justify-center rounded-sm bg-neon-green/20">
+        <Check className="h-3 w-3 text-neon-green" />
       </div>
     );
   }
   if (status === "failed") {
     return (
-      <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500/20">
-        <X className="h-3 w-3 text-red-400" />
+      <div className="flex h-5 w-5 items-center justify-center rounded-sm bg-neon-pink/20">
+        <X className="h-3 w-3 text-neon-pink" />
       </div>
     );
   }
   if (status === "skipped") {
-    return <SkipForward className="h-4 w-4 text-zinc-600" />;
+    return <SkipForward className="h-4 w-4 text-muted-foreground" />;
   }
-  // pending
-  return <div className="h-2 w-2 rounded-full bg-zinc-700" />;
+  return <div className="h-2 w-2 rounded-full bg-border" />;
 }
 
 function StageRow({ stage }: { stage: ProgressStage }) {
@@ -103,54 +104,51 @@ function StageRow({ stage }: { stage: ProgressStage }) {
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg px-3 py-2.5 transition-all",
-        isRunning && "bg-violet-500/8 ring-1 ring-violet-500/20",
-        isFailed && "bg-red-500/5"
+        "flex items-start gap-3 rounded-sm px-3 py-2.5 transition-all",
+        isRunning && "bg-neon-cyan/5 ring-1 ring-neon-cyan/20",
+        isFailed && "bg-neon-pink/5"
       )}
     >
-      {/* Stage icon */}
       <div
         className={cn(
-          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-          isRunning && "bg-violet-500/20",
-          isComplete && "bg-emerald-500/10",
-          isFailed && "bg-red-500/10",
-          isPending && "bg-zinc-800",
-          stage.status === "skipped" && "bg-zinc-800/50"
+          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-sm",
+          isRunning && "bg-neon-cyan/20",
+          isComplete && "bg-neon-green/10",
+          isFailed && "bg-neon-pink/10",
+          isPending && "bg-secondary",
+          stage.status === "skipped" && "bg-secondary/50"
         )}
       >
         <Icon
           className={cn(
             "h-3.5 w-3.5",
-            isRunning && "text-violet-400",
-            isComplete && "text-emerald-400",
-            isFailed && "text-red-400",
-            isPending && "text-zinc-600",
-            stage.status === "skipped" && "text-zinc-700"
+            isRunning && "text-neon-cyan",
+            isComplete && "text-neon-green",
+            isFailed && "text-neon-pink",
+            isPending && "text-muted-foreground",
+            stage.status === "skipped" && "text-muted-foreground/50"
           )}
         />
       </div>
 
-      {/* Label + message */}
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "text-sm leading-snug",
-            isRunning && "font-medium text-zinc-200",
-            isComplete && "text-zinc-400",
-            isFailed && "text-red-400",
-            isPending && "text-zinc-600",
-            stage.status === "skipped" && "text-zinc-700 line-through"
+            "text-sm font-mono leading-snug",
+            isRunning && "font-medium text-foreground",
+            isComplete && "text-muted-foreground",
+            isFailed && "text-neon-pink",
+            isPending && "text-muted-foreground/50",
+            stage.status === "skipped" && "text-muted-foreground/30 line-through"
           )}
         >
           {stage.label}
         </p>
         {stage.message && (
-          <p className="mt-0.5 text-xs text-zinc-500">{stage.message}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{stage.message}</p>
         )}
       </div>
 
-      {/* Status indicator */}
       <div className="mt-0.5 shrink-0">
         <StageStatusIcon status={stage.status} />
       </div>
@@ -181,41 +179,43 @@ export function ProgressTracker({
   return (
     <div className="w-full max-w-lg space-y-6">
       {/* Header */}
-      <div className="space-y-1">
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-100">
+          <h2 className="font-mono text-lg font-bold text-foreground tracking-wider">
             {status === "complete"
-              ? "Analysis complete!"
+              ? "ANALYSIS COMPLETE"
               : status === "failed"
-                ? "Analysis failed"
-                : `Analyzing ${companyName}`}
+                ? "ANALYSIS FAILED"
+                : `ANALYZING ${companyName.toUpperCase()}`}
           </h2>
-          <Badge
+          <NeonBadge
             variant={
               status === "complete"
-                ? "success"
+                ? "green"
                 : status === "failed"
-                  ? "destructive"
-                  : "info"
+                  ? "pink"
+                  : "cyan"
             }
           >
             {status === "complete"
-              ? "Done"
+              ? "DONE"
               : status === "failed"
-                ? "Failed"
+                ? "FAILED"
                 : status === "pending"
-                  ? "Starting..."
-                  : "Live"}
-          </Badge>
+                  ? "STARTING"
+                  : "LIVE"}
+          </NeonBadge>
         </div>
 
         {status !== "failed" && (
           <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-zinc-500">
+            <div className="flex items-center justify-between font-mono text-[10px] text-muted-foreground tracking-widest">
               <span>
-                {completedCount} / {totalCount} stages
+                {completedCount} / {totalCount} STAGES
               </span>
-              <span>{progress}%</span>
+              <span className="text-neon-green">
+                <CountUp end={progress} suffix="%" />
+              </span>
             </div>
             <Progress value={progress} className="h-1.5" />
           </div>
@@ -224,8 +224,8 @@ export function ProgressTracker({
 
       {/* Error state */}
       {status === "failed" && error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-          <p className="text-sm text-red-400">{error}</p>
+        <div className="terminal-card border-neon-pink">
+          <p className="text-sm text-neon-pink font-mono">{error}</p>
         </div>
       )}
 
@@ -248,18 +248,18 @@ export function ProgressTracker({
               <div className="mb-1.5 flex items-center gap-2 px-3">
                 <p
                   className={cn(
-                    "text-xs font-semibold uppercase tracking-widest",
+                    "font-mono text-[10px] font-bold uppercase tracking-widest",
                     groupComplete
-                      ? "text-zinc-500"
+                      ? "text-neon-green"
                       : groupRunning
-                        ? "text-violet-400"
-                        : "text-zinc-600"
+                        ? group.color
+                        : "text-muted-foreground"
                   )}
                 >
                   {group.label}
                 </p>
                 {groupComplete && (
-                  <Check className="h-3 w-3 text-emerald-500" />
+                  <Check className="h-3 w-3 text-neon-green" />
                 )}
               </div>
               <div className="space-y-0.5">
@@ -272,10 +272,9 @@ export function ProgressTracker({
         })}
       </div>
 
-      {/* Connecting dots while running */}
       {(status === "pending" || status === "running") && (
-        <p className="text-center text-xs text-zinc-600">
-          This usually takes 60–90 seconds...
+        <p className="text-center font-mono text-[10px] text-muted-foreground tracking-widest">
+          THIS USUALLY TAKES 60–90 SECONDS...
         </p>
       )}
     </div>

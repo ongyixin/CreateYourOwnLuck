@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Zap, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, AlertCircle } from "lucide-react";
 import { ProgressTracker } from "@/components/processing/progress-tracker";
+import AnimatedLogo from "@/components/animated-logo";
+import ScanlineOverlay from "@/components/scanline-overlay";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import type {
   StatusEvent,
@@ -13,7 +14,6 @@ import type {
   JobStatus,
 } from "@/lib/types";
 
-// Build the initial stages list (all pending) from the type definitions
 function buildInitialStages(): ProgressStage[] {
   return PIPELINE_STAGES.map((stage) => ({
     stage,
@@ -34,14 +34,12 @@ export default function ProcessingPage() {
   const [sseError, setSseError] = useState<string | null>(null);
   const [jobError, setJobError] = useState<string | undefined>();
 
-  // Track whether we've redirected to avoid double-redirects
   const redirected = useRef(false);
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (!id) return;
 
-    // Connect to SSE stream
     const es = new EventSource(`/api/status/${id}`);
     esRef.current = es;
 
@@ -50,7 +48,6 @@ export default function ProcessingPage() {
       try {
         data = JSON.parse(event.data) as StatusEvent;
       } catch {
-        // Ignore malformed events
         return;
       }
 
@@ -62,16 +59,9 @@ export default function ProcessingPage() {
         setJobError(data.error);
       }
 
-      // Pull company name from the first stage label if not yet set
-      // (The backend should ideally send it; we fall back to what's available)
-      if (data.stages.length > 0 && companyName === "your company") {
-        // No company name in StatusEvent — wait for it if backend adds it later
-      }
-
       if (data.status === "complete" && !redirected.current) {
         redirected.current = true;
         es.close();
-        // Small delay so the user sees the "complete" state
         setTimeout(() => {
           router.push(`/report/${id}`);
         }, 1200);
@@ -84,7 +74,6 @@ export default function ProcessingPage() {
 
     es.onerror = () => {
       es.close();
-      // Only show error if we haven't completed successfully
       if (!redirected.current) {
         setSseError(
           "Lost connection to the analysis stream. The analysis may still be running — try refreshing."
@@ -98,7 +87,6 @@ export default function ProcessingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Pick up company name stored by the analyze page on submit
   useEffect(() => {
     if (!id) return;
     const stored = sessionStorage.getItem(`fitcheck-company-${id}`);
@@ -106,34 +94,38 @@ export default function ProcessingPage() {
   }, [id]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#09090b]">
+    <div className="flex min-h-screen flex-col relative">
+      <ScanlineOverlay />
+
       {/* Nav */}
-      <nav className="border-b border-zinc-800/50 px-6 py-4">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Zap className="h-4 w-4 text-violet-400" />
-            <span className="text-sm font-semibold text-zinc-200">FitCheck</span>
-          </div>
-          <span className="text-xs text-zinc-500">Job ID: {id}</span>
+      <nav className="relative z-40 flex items-center justify-between px-6 py-3 border-b border-border bg-background/90 backdrop-blur-md">
+        <div className="flex items-center gap-2">
+          <AnimatedLogo size={18} />
+          <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+            FITCHECK<span className="blink">_</span>
+          </span>
         </div>
+        <span className="font-mono text-[10px] text-muted-foreground tracking-widest">
+          JOB: {id.slice(0, 8)}
+        </span>
       </nav>
 
       {/* Main */}
-      <main className="flex flex-1 flex-col items-center justify-center px-6 py-12">
+      <main className="relative z-20 flex flex-1 flex-col items-center justify-center px-6 py-12">
         {/* Connection error banner */}
         {sseError && (
-          <div className="mb-6 flex w-full max-w-lg items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-            <div>
-              <p className="text-sm text-amber-300">{sseError}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.location.reload()}
-                className="mt-2 h-auto p-0 text-xs text-amber-400 hover:text-amber-200"
-              >
-                Refresh page
-              </Button>
+          <div className="mb-6 w-full max-w-lg terminal-card border-neon-amber">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-neon-amber" />
+              <div>
+                <p className="text-sm text-neon-amber font-mono">{sseError}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="mt-2 font-mono text-[10px] text-neon-green hover:underline tracking-wider"
+                >
+                  REFRESH PAGE
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -149,26 +141,30 @@ export default function ProcessingPage() {
         {/* Complete CTA */}
         {jobStatus === "complete" && (
           <div className="mt-8 text-center animate-fade-in">
-            <p className="mb-4 text-sm text-zinc-400">
+            <p className="mb-4 text-sm text-muted-foreground font-mono">
               Your FitCheck report is ready.
             </p>
-            <Button asChild size="lg" className="gap-2">
-              <Link href={`/report/${id}`}>
-                View Report <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            <Link
+              href={`/report/${id}`}
+              className="inline-flex items-center gap-2 bg-neon-green text-primary-foreground font-mono font-bold px-6 py-3 rounded-sm text-sm tracking-wider hover:glow-green transition-all active:scale-95"
+            >
+              VIEW REPORT <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
         )}
 
         {/* Failed CTA */}
         {jobStatus === "failed" && (
           <div className="mt-8 text-center">
-            <p className="mb-4 text-sm text-zinc-400">
+            <p className="mb-4 text-sm text-muted-foreground font-mono">
               Something went wrong during analysis.
             </p>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/analyze">Try again</Link>
-            </Button>
+            <Link
+              href="/analyze"
+              className="inline-flex items-center gap-2 border-2 border-neon-pink text-neon-pink font-mono font-bold px-5 py-2 rounded-sm text-xs tracking-wider hover:bg-neon-pink hover:text-primary-foreground transition-all"
+            >
+              TRY AGAIN
+            </Link>
           </div>
         )}
       </main>

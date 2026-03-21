@@ -1,18 +1,5 @@
 "use client";
 
-/**
- * /report/[id] — FitCheck report page
- *
- * Fetches the report from GET /api/report/[id].
- * - If 202, polls every 3 s with a pending/progress state.
- * - If 200, renders the full 5-section tabbed report.
- * - Handles loading, error, and missing states gracefully.
- *
- * Demo: visit /report/demo to see the full UI with mock data.
- *
- * Owned by: report agent
- */
-
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -20,10 +7,16 @@ import {
   Loader2,
   AlertTriangle,
   Clock,
-  Zap,
+  Eye,
+  Users,
+  Target,
+  TrendingUp,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import ScanlineOverlay from "@/components/scanline-overlay";
+import AnimatedLogo from "@/components/animated-logo";
+import NeonBadge from "@/components/neon-badge";
 import type { FitCheckReport, PendingReportResponse } from "@/lib/types";
 
 import { ReportHeader } from "@/components/report/report-header";
@@ -33,19 +26,15 @@ import { ActionablesSection } from "@/components/report/actionables";
 import { LeadSuggestionsSection } from "@/components/report/lead-suggestions";
 import { IcpStudioSection } from "@/components/report/icp-studio";
 
-// ─── Tab definitions ──────────────────────────────────────────────────────────
-
 type Tab = "brand" | "icp" | "actions" | "leads" | "studio";
 
-const TABS: { id: Tab; label: string; emoji: string }[] = [
-  { id: "brand", label: "Brand", emoji: "🎯" },
-  { id: "icp", label: "ICP", emoji: "👥" },
-  { id: "actions", label: "Actions", emoji: "⚡" },
-  { id: "leads", label: "Leads", emoji: "📡" },
-  { id: "studio", label: "ICP Studio", emoji: "🧬" },
+const TABS: { id: Tab; label: string; icon: React.ElementType; color: string }[] = [
+  { id: "brand", label: "BRAND", icon: Eye, color: "text-neon-green" },
+  { id: "icp", label: "ICP", icon: Users, color: "text-neon-cyan" },
+  { id: "actions", label: "ACTIONS", icon: Target, color: "text-neon-amber" },
+  { id: "leads", label: "LEADS", icon: TrendingUp, color: "text-neon-pink" },
+  { id: "studio", label: "STUDIO", icon: UserCircle, color: "text-neon-purple" },
 ];
-
-// ─── Page component ───────────────────────────────────────────────────────────
 
 export default function ReportPage() {
   const params = useParams();
@@ -73,7 +62,7 @@ export default function ReportPage() {
         setPending(true);
         setProgress(data.progress ?? 0);
         setLoading(false);
-        return false; // keep polling
+        return false;
       }
 
       if (res.status >= 500) {
@@ -122,124 +111,134 @@ export default function ReportPage() {
     };
   }, [fetchReport, id]);
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-
   if (loading) {
     return (
       <Shell>
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
-          <p className="text-sm text-zinc-500">Loading report…</p>
+          <Loader2 className="h-8 w-8 animate-spin text-neon-green" />
+          <p className="font-mono text-sm text-muted-foreground tracking-wider">LOADING REPORT...</p>
         </div>
       </Shell>
     );
   }
-
-  // ── Error ────────────────────────────────────────────────────────────────
 
   if (error) {
     return (
       <Shell>
         <div className="text-center space-y-4 max-w-sm">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10 mx-auto">
-            <AlertTriangle className="h-6 w-6 text-red-400" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-sm border-2 border-neon-pink mx-auto">
+            <AlertTriangle className="h-6 w-6 text-neon-pink" />
           </div>
-          <h2 className="text-white font-semibold">Something went wrong</h2>
-          <p className="text-sm text-zinc-400 leading-relaxed">{error}</p>
+          <h2 className="font-mono text-foreground font-bold tracking-wider">SOMETHING WENT WRONG</h2>
+          <p className="text-sm text-muted-foreground">{error}</p>
           <div className="flex gap-3 justify-center">
-            <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
-              Retry
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/">Back to home</Link>
-            </Button>
+            <button
+              onClick={() => window.location.reload()}
+              className="border-2 border-neon-cyan text-neon-cyan font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider hover:bg-neon-cyan hover:text-primary-foreground transition-all"
+            >
+              RETRY
+            </button>
+            <Link
+              href="/"
+              className="border-2 border-border text-muted-foreground font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider hover:border-neon-green hover:text-neon-green transition-all"
+            >
+              HOME
+            </Link>
           </div>
         </div>
       </Shell>
     );
   }
-
-  // ── Pending / still processing ───────────────────────────────────────────
 
   if (pending || !report) {
     return (
       <Shell>
         <div className="text-center space-y-6 max-w-sm w-full">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-500/10 mx-auto">
-            <Clock className="h-7 w-7 text-violet-400 animate-pulse" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-sm border-2 border-neon-cyan mx-auto">
+            <Clock className="h-7 w-7 text-neon-cyan animate-pulse" />
           </div>
           <div>
-            <h2 className="text-white font-semibold text-lg mb-1">
-              Analysis in progress
+            <h2 className="font-mono text-foreground font-bold text-lg tracking-wider mb-1">
+              ANALYSIS IN PROGRESS
             </h2>
-            <p className="text-sm text-zinc-400 leading-relaxed">
+            <p className="text-sm text-muted-foreground">
               Your FitCheck report is being generated. This usually takes 60–90 seconds.
             </p>
           </div>
           <div className="space-y-2">
-            <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-secondary rounded-sm h-2 overflow-hidden">
               <div
-                className="bg-violet-500 h-2 rounded-full transition-all duration-700"
+                className="bg-neon-green h-2 rounded-sm transition-all duration-700"
                 style={{ width: `${Math.max(progress, 4)}%` }}
               />
             </div>
-            <p className="text-zinc-600 text-xs">{progress}% complete · auto-refreshing…</p>
+            <p className="font-mono text-[10px] text-muted-foreground tracking-widest">
+              {progress}% COMPLETE · AUTO-REFRESHING...
+            </p>
           </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/analyze">Start a new analysis</Link>
-          </Button>
+          <Link
+            href="/analyze"
+            className="inline-block font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+          >
+            START NEW ANALYSIS
+          </Link>
         </div>
       </Shell>
     );
   }
 
-  // ── Full report ──────────────────────────────────────────────────────────
-
   return (
-    <div className="min-h-screen bg-[#09090b]">
+    <div className="min-h-screen relative">
+      <ScanlineOverlay />
+
       {/* Sticky header + tabs */}
-      <div className="sticky top-0 z-40 bg-[#09090b]/95 backdrop-blur-sm border-b border-zinc-800/60">
+      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border">
         <ReportHeader report={report} />
 
         {/* Tab nav */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex gap-0 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-150",
-                  activeTab === tab.id
-                    ? "border-violet-500 text-white"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
-                )}
-              >
-                <span className="text-base leading-none">{tab.emoji}</span>
-                {tab.label}
-              </button>
-            ))}
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-3 font-mono text-xs font-bold whitespace-nowrap border-b-2 transition-all duration-150 tracking-wider",
+                    isActive
+                      ? `border-current ${tab.color}`
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                  )}
+                >
+                  <tab.icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* Section content */}
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <main className="relative z-20 max-w-5xl mx-auto px-4 sm:px-6 py-8">
         {/* Pipeline warnings */}
         {report.warnings.length > 0 && (
-          <div className="mb-6 px-4 py-3 bg-amber-950/30 border border-amber-800/40 rounded-lg flex items-start gap-3">
-            <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-amber-300 text-sm font-medium mb-1">
-                Partial data — some web scrapes failed
-              </p>
-              <ul className="space-y-0.5">
-                {report.warnings.map((w, i) => (
-                  <li key={i} className="text-amber-400/60 text-xs">
-                    {w}
-                  </li>
-                ))}
-              </ul>
+          <div className="mb-6 terminal-card border-neon-amber">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-4 w-4 text-neon-amber mt-0.5 shrink-0" />
+              <div>
+                <p className="text-neon-amber font-mono text-xs font-bold tracking-wider mb-1">
+                  PARTIAL DATA — SOME WEB SCRAPES FAILED
+                </p>
+                <ul className="space-y-0.5">
+                  {report.warnings.map((w, i) => (
+                    <li key={i} className="text-muted-foreground text-xs font-mono">
+                      › {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         )}
@@ -266,18 +265,19 @@ export default function ReportPage() {
   );
 }
 
-// ─── Shell (centered layout for non-report states) ────────────────────────────
-
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#09090b] flex flex-col">
-      <nav className="border-b border-zinc-800/50 px-6 py-4">
-        <div className="mx-auto max-w-5xl flex items-center gap-1.5">
-          <Zap className="h-4 w-4 text-violet-400" />
-          <span className="text-sm font-semibold text-zinc-200">FitCheck</span>
+    <div className="min-h-screen flex flex-col relative">
+      <ScanlineOverlay />
+      <nav className="relative z-40 border-b border-border px-6 py-3">
+        <div className="mx-auto max-w-5xl flex items-center gap-2">
+          <AnimatedLogo size={18} />
+          <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+            FITCHECK<span className="blink">_</span>
+          </span>
         </div>
       </nav>
-      <div className="flex flex-1 items-center justify-center px-6 py-12">
+      <div className="relative z-20 flex flex-1 items-center justify-center px-6 py-12">
         {children}
       </div>
     </div>

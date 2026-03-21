@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Loader2, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Cpu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/form/step-indicator";
 import { CompanyInfoStep } from "@/components/form/company-info-step";
@@ -11,10 +11,10 @@ import { MaterialsStep } from "@/components/form/materials-step";
 import { CompetitorsStep } from "@/components/form/competitors-step";
 import { GoalStep } from "@/components/form/goal-step";
 import { SourcesStep } from "@/components/form/sources-step";
+import AnimatedLogo from "@/components/animated-logo";
+import ScanlineOverlay from "@/components/scanline-overlay";
 import type { AnalysisRequest, AnalyzeResponse, ScraperSource } from "@/lib/types";
 import { ALL_SCRAPER_SOURCES } from "@/lib/types";
-
-// ─── Form state ───────────────────────────────────────────────────────────────
 
 interface FormState {
   companyName: string;
@@ -34,8 +34,6 @@ const INITIAL_FORM: FormState = {
   selectedSources: ALL_SCRAPER_SOURCES,
 };
 
-// ─── Steps config ─────────────────────────────────────────────────────────────
-
 const STEPS = [
   { label: "Company", description: "Your company details" },
   { label: "Materials", description: "Additional context" },
@@ -43,8 +41,6 @@ const STEPS = [
   { label: "Sources", description: "Data sources to scrape" },
   { label: "Goal", description: "What to focus on" },
 ];
-
-// ─── Validation ───────────────────────────────────────────────────────────────
 
 function isValidUrl(url: string): boolean {
   try {
@@ -79,8 +75,6 @@ function validateStep(step: number, form: FormState): Record<string, string> {
 
   return errors;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AnalyzePage() {
   const router = useRouter();
@@ -117,7 +111,6 @@ export default function AnalyzePage() {
     setSubmitting(true);
     setSubmitError(null);
 
-    // Build the request — filter out empty competitor URLs
     const request: AnalysisRequest = {
       companyName: form.companyName.trim(),
       websiteUrl: form.websiteUrl.trim(),
@@ -142,7 +135,6 @@ export default function AnalyzePage() {
       }
 
       const data: AnalyzeResponse = await res.json();
-      // Persist company name so the processing page can display it
       sessionStorage.setItem(`fitcheck-company-${data.jobId}`, request.companyName);
       router.push(`/processing/${data.jobId}`);
     } catch (err) {
@@ -151,7 +143,6 @@ export default function AnalyzePage() {
     }
   }
 
-  // Per-step error shapes expected by child components
   const companyErrors = {
     companyName: errors.companyName,
     websiteUrl: errors.websiteUrl,
@@ -163,32 +154,43 @@ export default function AnalyzePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b]">
+    <div className="min-h-screen relative">
+      <ScanlineOverlay />
+
       {/* Nav */}
-      <nav className="border-b border-zinc-800/50 px-6 py-4">
-        <div className="mx-auto flex max-w-2xl items-center gap-3">
+      <nav className="sticky top-0 z-40 flex items-center justify-between px-6 py-3 border-b border-border bg-background/90 backdrop-blur-md">
+        <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-sm text-zinc-400 transition-colors hover:text-zinc-200"
+            className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-neon-green"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            <span className="font-mono text-[10px] tracking-wider">BACK</span>
           </Link>
-          <div className="flex items-center gap-1.5">
-            <Zap className="h-4 w-4 text-violet-400" />
-            <span className="text-sm font-semibold text-zinc-200">FitCheck</span>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2">
+            <AnimatedLogo size={18} />
+            <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+              FITCHECK<span className="blink">_</span>
+            </span>
           </div>
+        </div>
+        <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
+          SETUP WIZARD
         </div>
       </nav>
 
-      <main className="px-6 py-10">
+      <main className="relative z-20 px-6 py-10">
         <div className="mx-auto max-w-2xl">
           {/* Header */}
           <div className="mb-8 text-center">
-            <h1 className="mb-2 text-2xl font-bold text-zinc-100">
-              Set up your analysis
+            <div className="font-mono text-[10px] text-neon-pink tracking-[0.4em] mb-2 uppercase">
+              CONFIGURATION
+            </div>
+            <h1 className="font-mono text-2xl font-bold text-foreground tracking-wider">
+              SET UP YOUR ANALYSIS
             </h1>
-            <p className="text-sm text-zinc-400">
+            <p className="mt-2 text-sm text-muted-foreground">
               Tell us about your company — we&apos;ll handle the rest.
             </p>
           </div>
@@ -199,28 +201,26 @@ export default function AnalyzePage() {
           </div>
 
           {/* Step card */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl backdrop-blur-sm">
+          <div className="terminal-card border-border">
             {/* Current step label */}
-            <div className="mb-6 flex items-center gap-2 text-xs text-zinc-500">
-              <span className="font-mono text-violet-400">
+            <div className="mb-6 flex items-center gap-2 font-mono text-[10px] text-muted-foreground tracking-widest">
+              <Cpu className="h-3 w-3 text-neon-cyan" />
+              <span className="text-neon-green">
                 {String(step + 1).padStart(2, "0")}
               </span>
               <span>/</span>
-              <span className="font-mono text-zinc-600">
+              <span>
                 {String(STEPS.length).padStart(2, "0")}
               </span>
-              <span className="ml-1 text-zinc-400">
-                {STEPS[step].description}
+              <span className="ml-1 text-foreground">
+                {STEPS[step].description.toUpperCase()}
               </span>
             </div>
 
             {/* Step content */}
             {step === 0 && (
               <CompanyInfoStep
-                data={{
-                  companyName: form.companyName,
-                  websiteUrl: form.websiteUrl,
-                }}
+                data={{ companyName: form.companyName, websiteUrl: form.websiteUrl }}
                 errors={companyErrors}
                 onChange={(d) => setForm((f) => ({ ...f, ...d }))}
               />
@@ -254,77 +254,69 @@ export default function AnalyzePage() {
 
             {/* Submit error */}
             {submitError && (
-              <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-                <p className="text-xs text-red-400">{submitError}</p>
+              <div className="mt-4 rounded-sm border-2 border-neon-pink/30 bg-neon-pink/5 p-3">
+                <p className="text-xs text-neon-pink font-mono">{submitError}</p>
               </div>
             )}
 
             {/* Navigation */}
             <div className="mt-8 flex items-center justify-between">
-              <Button
+              <button
                 type="button"
-                variant="ghost"
                 onClick={handleBack}
                 disabled={step === 0 || submitting}
-                className="gap-1.5 text-zinc-400"
+                className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </Button>
+                BACK
+              </button>
 
               <div className="flex items-center gap-3">
-                {/* Skip button (not on first or last step) */}
                 {step > 0 && !isLastStep && (
-                  <Button
+                  <button
                     type="button"
-                    variant="ghost"
-                    size="sm"
                     onClick={() => setStep((s) => s + 1)}
                     disabled={submitting}
-                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                    className="font-mono text-[10px] text-muted-foreground hover:text-neon-cyan transition-colors tracking-wider"
                   >
-                    Skip
-                  </Button>
+                    SKIP
+                  </button>
                 )}
 
                 {isLastStep ? (
-                  <Button
+                  <button
                     type="button"
                     onClick={handleSubmit}
                     disabled={submitting}
-                    className="gap-2 px-6"
+                    className="flex items-center gap-2 bg-neon-green text-primary-foreground font-mono font-bold px-6 py-2.5 rounded-sm text-xs tracking-wider hover:glow-green transition-all active:scale-95 disabled:opacity-50"
                   >
                     {submitting ? (
                       <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Starting analysis...
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        STARTING...
                       </>
                     ) : (
-                      <>
-                        Run FitCheck
-                        <Zap className="h-4 w-4" />
-                      </>
+                      "[ RUN FITCHECK ]"
                     )}
-                  </Button>
+                  </button>
                 ) : (
-                  <Button
+                  <button
                     type="button"
                     onClick={handleNext}
-                    className="gap-1.5"
+                    className="flex items-center gap-1.5 border-2 border-neon-green text-neon-green font-mono font-bold px-5 py-2 rounded-sm text-xs tracking-wider hover:bg-neon-green hover:text-primary-foreground transition-all"
                   >
-                    Next
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
+                    NEXT <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Progress summary (bottom) */}
-          <div className="mt-6 text-center text-xs text-zinc-600">
-            Step {step + 1} of {STEPS.length}
-            {step === 0 && " — required"}
-            {step > 0 && " — optional"}
+          {/* Progress summary */}
+          <div className="mt-6 text-center font-mono text-[10px] text-muted-foreground tracking-widest">
+            STEP {step + 1} OF {STEPS.length}
+            {step === 0 && " — REQUIRED"}
+            {step > 0 && " — OPTIONAL"}
           </div>
         </div>
       </main>
