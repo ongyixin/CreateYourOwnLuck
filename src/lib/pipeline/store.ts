@@ -12,7 +12,12 @@ import type {
   AnalysisJob,
   AnalysisRequest,
   FitCheckReport,
+  FocusGroupAnalytics,
+  FocusGroupMessage,
+  FocusGroupPhase,
+  FocusGroupSession,
   JobStatus,
+  Persona,
   PipelineStage,
   ProgressStage,
   StageStatus,
@@ -28,10 +33,15 @@ import { PIPELINE_STAGES, STAGE_LABELS } from "../types";
 declare global {
   // eslint-disable-next-line no-var
   var __fitcheckJobs: Map<string, AnalysisJob> | undefined;
+  // eslint-disable-next-line no-var
+  var __fitcheckFocusGroups: Map<string, FocusGroupSession> | undefined;
 }
 
 const jobs: Map<string, AnalysisJob> =
   globalThis.__fitcheckJobs ?? (globalThis.__fitcheckJobs = new Map());
+
+const focusGroups: Map<string, FocusGroupSession> =
+  globalThis.__fitcheckFocusGroups ?? (globalThis.__fitcheckFocusGroups = new Map());
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
@@ -135,4 +145,70 @@ function patch(id: string, updates: Partial<AnalysisJob>): void {
   const job = jobs.get(id);
   if (!job) return;
   jobs.set(id, { ...job, ...updates, updatedAt: new Date().toISOString() });
+}
+
+// ─── Focus Group Store ────────────────────────────────────────────────────────
+
+export function createFocusGroupSession(
+  id: string,
+  jobId: string,
+  personas: Persona[]
+): FocusGroupSession {
+  const now = new Date().toISOString();
+  const session: FocusGroupSession = {
+    id,
+    jobId,
+    personas,
+    messages: [],
+    phase: "probe",
+    status: "active",
+    createdAt: now,
+    updatedAt: now,
+  };
+  focusGroups.set(id, session);
+  return session;
+}
+
+export function getFocusGroupSession(id: string): FocusGroupSession | undefined {
+  return focusGroups.get(id);
+}
+
+export function addFocusGroupMessage(
+  id: string,
+  message: FocusGroupMessage
+): void {
+  const session = focusGroups.get(id);
+  if (!session) return;
+  focusGroups.set(id, {
+    ...session,
+    messages: [...session.messages, message],
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export function updateSessionPhase(
+  id: string,
+  phase: FocusGroupPhase
+): void {
+  const session = focusGroups.get(id);
+  if (!session) return;
+  focusGroups.set(id, {
+    ...session,
+    phase,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export function setSessionAnalytics(
+  id: string,
+  analytics: FocusGroupAnalytics
+): void {
+  const session = focusGroups.get(id);
+  if (!session) return;
+  focusGroups.set(id, {
+    ...session,
+    analytics,
+    status: "complete",
+    updatedAt: new Date().toISOString(),
+  });
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { ExternalLink, Share2, Download, Copy } from "lucide-react";
+import { useState } from "react";
+import { ExternalLink, Download, Copy, Loader2 } from "lucide-react";
 import AnimatedLogo from "@/components/animated-logo";
 import type { FitCheckReport } from "@/lib/types";
 
@@ -9,10 +10,38 @@ interface ReportHeaderProps {
 }
 
 export function ReportHeader({ report }: ReportHeaderProps) {
+  const [exporting, setExporting] = useState(false);
+
   const generatedDate = new Date(report.generatedAt).toLocaleDateString(
     "en-US",
     { month: "short", day: "numeric", year: "numeric" }
   );
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/export/${report.jobId}`);
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+
+      const slug = report.companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      a.download = `fitcheck-${slug}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
@@ -58,12 +87,17 @@ export function ReportHeader({ report }: ReportHeaderProps) {
         </button>
 
         <button
-          className="flex items-center gap-1.5 h-8 px-3 bg-neon-green text-primary-foreground rounded-sm font-mono text-[10px] tracking-widest font-bold hover:glow-green transition-all"
-          onClick={() => window.print()}
-          title="Export report"
+          className="flex items-center gap-1.5 h-8 px-3 bg-neon-green text-primary-foreground rounded-sm font-mono text-[10px] tracking-widest font-bold hover:glow-green transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          onClick={handleExport}
+          disabled={exporting}
+          title="Export report as PDF"
         >
-          <Download className="h-3 w-3" />
-          <span className="hidden sm:inline">EXPORT</span>
+          {exporting ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          <span className="hidden sm:inline">{exporting ? "GENERATING..." : "EXPORT"}</span>
         </button>
       </div>
     </div>

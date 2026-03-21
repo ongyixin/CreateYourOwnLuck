@@ -38,7 +38,7 @@ function getModel() {
   if (provider === "gemini") {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-    return createGoogleGenerativeAI({ apiKey })("gemini-2.0-flash");
+    return createGoogleGenerativeAI({ apiKey })("gemini-2.5-flash");
   }
 
   throw new Error(`Unknown AI_PROVIDER "${provider}"`);

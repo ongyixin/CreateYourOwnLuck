@@ -12,7 +12,6 @@ export const ACTORS = {
   TWEET_SCRAPER: "apidojo/tweet-scraper",
   G2_SCRAPER: "zen-studio/g2-reviews-scraper",
   TRUSTPILOT_SCRAPER: "automation-lab/trustpilot-scraper",
-  JOB_SCRAPER: "bebity/linkedin-jobs-scraper",
   YOUTUBE_SCRAPER: "streamers/youtube-scraper",
   PRODUCT_HUNT_SCRAPER: "michael.g/product-hunt-scraper",
   AUTOCOMPLETE_SCRAPER: "damilo/google-autocomplete-apify",
@@ -83,14 +82,13 @@ export function buildTweetSearchInput(
 
 /**
  * Input for zen-studio/g2-reviews-scraper.
- * Requires a direct G2 product page URL. Derives a best-effort slug from
- * the company name (lowercase, spaces → hyphens). G2 resolves renamed slugs
- * automatically so approximate slugs usually still work.
+ * Requires a verified G2 product page URL discovered via Google search
+ * (e.g. https://www.g2.com/products/notion/reviews). The actor hard-FAILs
+ * if the URL does not resolve, so we never guess slugs from company names.
  */
-export function buildG2Input(companyName: string): Record<string, unknown> {
-  const slug = companyName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+export function buildG2InputFromUrl(g2Url: string): Record<string, unknown> {
   return {
-    url: `https://www.g2.com/products/${slug}/reviews`,
+    url: g2Url,
     limit: 15,
     sortOrder: "most_recent",
   };
@@ -122,20 +120,6 @@ export function trustpilotUrlFromWebsite(websiteUrl: string): string | null {
 }
 
 /**
- * Input for helloitsjoe/linkedin-jobs-scraper.
- * Scrapes job postings to surface company strategy and hiring signals.
- */
-export function buildJobSearchInput(
-  companyName: string,
-  maxJobs = 15
-): Record<string, unknown> {
-  return {
-    queries: [companyName],
-    maxJobs,
-  };
-}
-
-/**
  * Input for streamers/youtube-scraper.
  * Searches YouTube for brand-related content: reviews, demos, comparisons.
  */
@@ -147,20 +131,6 @@ export function buildYouTubeSearchInput(
     searchKeywords: companyName,
     maxResults,
     type: "video",
-  };
-}
-
-/**
- * Input for epctex/product-hunt-scraper.
- * Finds Product Hunt launches for the company.
- */
-export function buildProductHuntInput(
-  companyName: string
-): Record<string, unknown> {
-  return {
-    search: companyName,
-    maxItems: 5,
-    startUrls: [],
   };
 }
 
@@ -198,6 +168,7 @@ export function buildSearchQueries(
     `${quoted} site:g2.com`,
     `${quoted} site:trustpilot.com`,
     `${quoted} site:news.ycombinator.com`,
+    `${quoted} site:producthunt.com`,
     // News and PR coverage
     `${quoted} news OR "press release" OR announcement`,
     `${quoted} site:techcrunch.com OR site:venturebeat.com OR site:bloomberg.com`,

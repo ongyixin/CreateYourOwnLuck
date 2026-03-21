@@ -16,7 +16,6 @@ import type {
   ScrapedPage,
   StructuredReview,
   SocialMention,
-  JobPosting,
   VideoResult,
   ProductHuntEntry,
 } from "../types";
@@ -28,11 +27,9 @@ import {
   buildSearchInput,
   buildSearchQueries,
   buildTweetSearchInput,
-  buildG2Input,
+  buildG2InputFromUrl,
   buildTrustpilotInput,
-  buildJobSearchInput,
   buildYouTubeSearchInput,
-  buildProductHuntInput,
   buildAutocompleteInput,
   extractHostname,
   trustpilotUrlFromWebsite,
@@ -43,10 +40,10 @@ import {
   normalizeG2Reviews,
   normalizeTrustpilotReviews,
   normalizeTweets,
-  normalizeJobPostings,
   normalizeVideoResults,
-  normalizeProductHuntEntries,
   normalizeAutocompleteSuggestions,
+  extractG2UrlFromMentions,
+  extractProductHuntEntriesFromMentions,
 } from "./normalizer";
 
 // ─── Page limits ──────────────────────────────────────────────────────────────
@@ -71,13 +68,23 @@ const CRAWLER_MEMORY_COMPETITOR_MB = 1024;
 /**
  * Orchestrate all Apify scraping for a FitCheck analysis job.
  *
- * Website crawlers are run sequentially (company → competitors one-by-one)
- * to avoid hitting the free-plan concurrent memory ceiling.
- * All lighter actors (search, reviews, social, enrichment) run in parallel
- * while the crawlers are executing.
+ * Two-phase execution:
  *
- * Returns a fully-normalized ScrapedData. Any individual failure is captured
- * in `warnings` rather than thrown.
+ * Phase 1 — Google search (awaited):
+ *   Runs first so we can discover real G2 and Product Hunt URLs from the
+ *   `site:g2.com` and `site:producthunt.com` queries. Guessing slugs from
+ *   company names caused hard FAILED runs in the G2 actor; using confirmed
+ *   URLs from search results eliminates that class of failure entirely.
+ *
+ * Phase 2 — Everything else (parallel):
+ *   Twitter, G2 (real URL from Phase 1, skipped if not found), Trustpilot,
+ *   YouTube, and Autocomplete run in parallel. Product Hunt entries are
+ *   derived directly from Phase 1 mentions — no dedicated actor needed since
+ *   all available PH actors are date-based scrapers, not company-search ones.
+ *   Website crawlers are also started here but run sequentially to stay within
+ *   the free-plan concurrent memory ceiling.
+ *
+ * Any individual failure is captured in `warnings` rather than thrown.
  */
 export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> {
   const warnings: string[] = [];
@@ -89,20 +96,47 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   /** Resolved empty array used as a no-op placeholder for skipped tasks. */
   const SKIPPED: Promise<unknown[]> = Promise.resolve([]);
 
-  // ── Kick off lightweight tasks in parallel immediately ─────────────────────
+  // ── Phase 1: Google search ─────────────────────────────────────────────────
+  // Run first so we can extract real G2 + PH URLs before launching Phase 2.
 
   const searchQueries = buildSearchQueries(request.companyName, competitorUrls);
-  const searchTask = selected.has("google_search")
-    ? runActor(ACTORS.GOOGLE_SEARCH, buildSearchInput(searchQueries))
-    : SKIPPED;
+  let searchItems: unknown[] = [];
+  if (selected.has("google_search")) {
+    try {
+      searchItems = await runActor(ACTORS.GOOGLE_SEARCH, buildSearchInput(searchQueries)) as unknown[];
+    } catch (err) {
+      warnings.push(`Google search scrape failed: ${stringifyError(err)}`);
+    }
+  }
+
+  const mentions = normalizeMentions(searchItems);
+
+  if (selected.has("google_search") && searchItems.length > 0 && mentions.length === 0) {
+    warnings.push("Google search returned 0 mentions");
+  }
+
+  // Discover real G2 URL from search results (avoids slug-guessing failures).
+  const g2Url = extractG2UrlFromMentions(mentions);
+
+  // Derive Product Hunt entries from search snippets — no dedicated actor needed.
+  const rawPH = selected.has("enrichment")
+    ? extractProductHuntEntriesFromMentions(mentions)
+    : [];
+  const productHuntEntries: ProductHuntEntry[] | undefined =
+    rawPH.length > 0 ? rawPH : undefined;
+
+  // ── Phase 2: All remaining lightweight tasks (parallel) ────────────────────
 
   const tweetTask = selected.has("twitter")
     ? runActor(ACTORS.TWEET_SCRAPER, buildTweetSearchInput(request.companyName))
     : SKIPPED;
 
-  const g2Task = selected.has("reviews")
-    ? runActor(ACTORS.G2_SCRAPER, buildG2Input(request.companyName))
+  const g2Task = selected.has("reviews") && g2Url
+    ? runActor(ACTORS.G2_SCRAPER, buildG2InputFromUrl(g2Url))
     : SKIPPED;
+  if (selected.has("reviews") && !g2Url) {
+    warnings.push("G2 scrape skipped: no G2 product page found in search results");
+  }
 
   const trustpilotUrl = trustpilotUrlFromWebsite(request.websiteUrl);
   const trustpilotTask =
@@ -113,16 +147,8 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     warnings.push(`Trustpilot scrape skipped: could not derive URL from ${request.websiteUrl}`);
   }
 
-  const jobTask = selected.has("enrichment")
-    ? runActor(ACTORS.JOB_SCRAPER, buildJobSearchInput(request.companyName))
-    : SKIPPED;
-
   const youtubeTask = selected.has("enrichment")
     ? runActor(ACTORS.YOUTUBE_SCRAPER, buildYouTubeSearchInput(request.companyName))
-    : SKIPPED;
-
-  const productHuntTask = selected.has("enrichment")
-    ? runActor(ACTORS.PRODUCT_HUNT_SCRAPER, buildProductHuntInput(request.companyName))
     : SKIPPED;
 
   const autocompleteTask = selected.has("enrichment")
@@ -130,14 +156,11 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     : SKIPPED;
 
   const lightweightResults = Promise.allSettled([
-    searchTask,      // 0
-    tweetTask,       // 1
-    g2Task,          // 2
-    trustpilotTask,  // 3
-    jobTask,         // 4
-    youtubeTask,     // 5
-    productHuntTask, // 6
-    autocompleteTask,// 7
+    tweetTask,       // 0
+    g2Task,          // 1
+    trustpilotTask,  // 2
+    youtubeTask,     // 3
+    autocompleteTask,// 4
   ]);
 
   // ── Run crawlers sequentially to stay within concurrent memory limits ───────
@@ -166,17 +189,14 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     competitorResults.push(result);
   }
 
-  // ── Collect lightweight results ────────────────────────────────────────────
+  // ── Collect Phase 2 results ────────────────────────────────────────────────
 
   const lw = await lightweightResults;
-  const searchResult       = lw[0];
-  const tweetResult        = lw[1];
-  const g2Result           = lw[2];
-  const trustpilotResult   = lw[3];
-  const jobResult          = lw[4];
-  const youtubeResult      = lw[5];
-  const productHuntResult  = lw[6];
-  const autocompleteResult = lw[7];
+  const tweetResult        = lw[0];
+  const g2Result           = lw[1];
+  const trustpilotResult   = lw[2];
+  const youtubeResult      = lw[3];
+  const autocompleteResult = lw[4];
 
   // ── Company pages ──────────────────────────────────────────────────────────
 
@@ -218,21 +238,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
         `Competitor crawl failed for ${competitorUrl}: ${stringifyError(result.reason)}`
       );
     }
-  }
-
-  // ── Mentions (Google search results) ──────────────────────────────────────
-
-  const mentions =
-    searchResult?.status === "fulfilled"
-      ? normalizeMentions(searchResult.value)
-      : [];
-
-  if (!selected.has("google_search")) {
-    // intentionally skipped — no warning
-  } else if (searchResult?.status === "rejected") {
-    warnings.push(`Google search scrape failed: ${stringifyError(searchResult.reason)}`);
-  } else if (mentions.length === 0) {
-    warnings.push("Google search returned 0 mentions");
   }
 
   // ── Social mentions (Twitter/X) ────────────────────────────────────────────
@@ -291,21 +296,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     reviews = reviews.slice(0, 20);
   }
 
-  // ── Job postings ───────────────────────────────────────────────────────────
-
-  let jobPostings: JobPosting[] | undefined;
-  if (!selected.has("enrichment")) {
-    // intentionally skipped
-  } else if (jobResult?.status === "fulfilled") {
-    const jobs = normalizeJobPostings(jobResult.value);
-    jobPostings = jobs.length > 0 ? jobs : undefined;
-    if (jobs.length === 0) {
-      warnings.push("Job posting scrape returned 0 results");
-    }
-  } else if (jobResult?.status === "rejected") {
-    warnings.push(`Job posting scrape failed: ${stringifyError(jobResult.reason)}`);
-  }
-
   // ── YouTube videos ─────────────────────────────────────────────────────────
 
   let videos: VideoResult[] | undefined;
@@ -319,21 +309,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     }
   } else if (youtubeResult?.status === "rejected") {
     warnings.push(`YouTube scrape failed: ${stringifyError(youtubeResult.reason)}`);
-  }
-
-  // ── Product Hunt ───────────────────────────────────────────────────────────
-
-  let productHuntEntries: ProductHuntEntry[] | undefined;
-  if (!selected.has("enrichment")) {
-    // intentionally skipped
-  } else if (productHuntResult?.status === "fulfilled") {
-    const ph = normalizeProductHuntEntries(productHuntResult.value);
-    productHuntEntries = ph.length > 0 ? ph : undefined;
-    if (ph.length === 0) {
-      warnings.push("Product Hunt scrape returned 0 entries");
-    }
-  } else if (productHuntResult?.status === "rejected") {
-    warnings.push(`Product Hunt scrape failed: ${stringifyError(productHuntResult.reason)}`);
   }
 
   // ── Autocomplete ───────────────────────────────────────────────────────────
@@ -357,7 +332,6 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
     mentions,
     reviews,
     socialMentions,
-    jobPostings,
     videos,
     productHuntEntries,
     autocompleteSuggestions,

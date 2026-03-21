@@ -271,7 +271,6 @@ function resolveScrapeStages(
     updateStage(jobId, "scrape_enrichment", "skipped", "Not selected");
   } else {
     const hasEnrichment =
-      (data.jobPostings && data.jobPostings.length > 0) ||
       (data.videos && data.videos.length > 0) ||
       (data.productHuntEntries && data.productHuntEntries.length > 0) ||
       (data.autocompleteSuggestions && data.autocompleteSuggestions.length > 0);
@@ -279,7 +278,7 @@ function resolveScrapeStages(
     if (hasEnrichment) {
       updateStage(jobId, "scrape_enrichment", "complete");
     } else {
-      const msg = warnings.find((w) => /job|youtube|product hunt|autocomplete/i.test(w)) ?? "No enrichment data returned";
+      const msg = warnings.find((w) => /youtube|product hunt|autocomplete/i.test(w)) ?? "No enrichment data returned";
       updateStage(jobId, "scrape_enrichment", "failed", msg);
     }
   }

@@ -12,6 +12,7 @@ import {
   Target,
   TrendingUp,
   UserCircle,
+  UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ScanlineOverlay from "@/components/scanline-overlay";
@@ -25,8 +26,9 @@ import { IcpAssessmentSection } from "@/components/report/icp-assessment";
 import { ActionablesSection } from "@/components/report/actionables";
 import { LeadSuggestionsSection } from "@/components/report/lead-suggestions";
 import { IcpStudioSection } from "@/components/report/icp-studio";
+import { FocusGroupSection } from "@/components/report/focus-group";
 
-type Tab = "brand" | "icp" | "actions" | "leads" | "studio";
+type Tab = "brand" | "icp" | "actions" | "leads" | "studio" | "focus";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType; color: string }[] = [
   { id: "brand", label: "BRAND", icon: Eye, color: "text-neon-green" },
@@ -34,6 +36,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType; color: string }[]
   { id: "actions", label: "ACTIONS", icon: Target, color: "text-neon-amber" },
   { id: "leads", label: "LEADS", icon: TrendingUp, color: "text-neon-pink" },
   { id: "studio", label: "STUDIO", icon: UserCircle, color: "text-neon-purple" },
+  { id: "focus", label: "FOCUS GROUP", icon: UsersRound, color: "text-neon-amber" },
 ];
 
 export default function ReportPage() {
@@ -258,6 +261,12 @@ export default function ReportPage() {
           )}
           {activeTab === "studio" && (
             <IcpStudioSection data={report.icpStudio} />
+          )}
+          {activeTab === "focus" && (
+            <FocusGroupSection
+              personas={report.icpStudio.personas}
+              jobId={report.jobId}
+            />
           )}
         </div>
       </main>

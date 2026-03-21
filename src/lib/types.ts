@@ -164,15 +164,6 @@ export interface SocialMention {
   url?: string;
 }
 
-export interface JobPosting {
-  title: string;
-  company: string;
-  location?: string;
-  /** Truncated job description */
-  description: string;
-  url?: string;
-}
-
 export interface VideoResult {
   title: string;
   channelName: string;
@@ -199,8 +190,6 @@ export interface ScrapedData {
   reviews?: StructuredReview[];
   /** Twitter/X mentions */
   socialMentions?: SocialMention[];
-  /** Job postings — signals company strategy and growth areas */
-  jobPostings?: JobPosting[];
   /** YouTube search results for brand/product content */
   videos?: VideoResult[];
   /** Product Hunt launches */
@@ -362,6 +351,8 @@ export interface Persona {
   /** Gaps between current brand and what this persona cares about */
   painPointGaps: string[];
   evidence: Evidence[];
+  /** Estimated share of the total addressable market (0–100, sums to ~100 across personas) */
+  marketWeight?: number;
 }
 
 export interface FiveSecondReaction {
@@ -410,6 +401,71 @@ export interface PendingReportResponse {
 }
 
 export type ReportResponse = FitCheckReport | PendingReportResponse;
+
+// ------------------------------------------------------------
+// 7b. Focus Group
+// ------------------------------------------------------------
+
+/**
+ * probe — founder asks / drops claims; personas respond and react to each other.
+ * flip  — personas interrogate the founder; each asks one key question, then reacts to answers.
+ */
+export type FocusGroupPhase = "probe" | "flip";
+
+export interface FocusGroupMessage {
+  id: string;
+  /** 'user' = the founder/moderator; 'persona' = an AI agent; 'system' = phase announcements */
+  role: "user" | "persona" | "system";
+  personaId?: string;
+  personaName?: string;
+  content: string;
+  timestamp: string;
+}
+
+export interface FocusGroupSession {
+  id: string;
+  jobId: string;
+  personas: Persona[];
+  messages: FocusGroupMessage[];
+  phase: FocusGroupPhase;
+  status: "active" | "complete";
+  analytics?: FocusGroupAnalytics;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonaScore {
+  personaId: string;
+  personaName: string;
+  personaTitle: string;
+  marketWeight: number;
+  conversionLikelihood: number;
+  weightedSignal: number;
+}
+
+export interface RankedSegment {
+  personaName: string;
+  personaTitle: string;
+  rationale: string;
+  weightedSignal: number;
+}
+
+export interface WeightedObjection {
+  objection: string;
+  tamPercent: number;
+  raisedBy: string[];
+}
+
+export interface FocusGroupAnalytics {
+  pmfScore: number;
+  personaScores: PersonaScore[];
+  icpPriorityRanking: RankedSegment[];
+  topObjections: WeightedObjection[];
+  consensusSignals: string[];
+  deadWeight: string[];
+  recommendedActions: string[];
+  adjacentSegmentSignal?: string;
+}
 
 // ------------------------------------------------------------
 // 8. Pipeline stage labels (UI display)

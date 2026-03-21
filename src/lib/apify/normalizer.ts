@@ -12,7 +12,6 @@ import type {
   PublicMention,
   StructuredReview,
   SocialMention,
-  JobPosting,
   VideoResult,
   ProductHuntEntry,
 } from "../types";
@@ -309,45 +308,6 @@ export function normalizeTweets(items: unknown[]): SocialMention[] {
   return mentions.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
 }
 
-// ─── Job posting normalizer ───────────────────────────────────────────────────
-
-interface RawJobPosting {
-  title?: string;
-  position?: string;
-  company?: string;
-  companyName?: string;
-  location?: string;
-  description?: string;
-  descriptionText?: string;
-  url?: string;
-}
-
-/**
- * Convert raw job scraper items into JobPosting[].
- * Truncates description to 200 chars. Caps at 15.
- */
-export function normalizeJobPostings(items: unknown[]): JobPosting[] {
-  const postings: JobPosting[] = [];
-
-  for (const raw of items.slice(0, 15)) {
-    const item = raw as RawJobPosting;
-    const title = item.title ?? item.position ?? "";
-    if (!title) continue;
-
-    const description = item.description ?? item.descriptionText ?? "";
-
-    postings.push({
-      title,
-      company: item.company ?? item.companyName ?? "",
-      location: item.location,
-      description: truncate(description, 200),
-      url: item.url,
-    });
-  }
-
-  return postings;
-}
-
 // ─── YouTube video normalizer ─────────────────────────────────────────────────
 
 interface RawVideoResult {
@@ -398,47 +358,45 @@ export function normalizeVideoResults(items: unknown[]): VideoResult[] {
 
 // ─── Product Hunt normalizer ──────────────────────────────────────────────────
 
-interface RawProductHuntEntry {
-  url?: string;
-  name?: string;
-  tagline?: string;
-  description?: string;
-  votesCount?: number;
-  upvotes?: number;
-  commentsCount?: number;
-  topics?: Array<{ name?: string } | string>;
+/**
+ * Extract the first G2 product reviews URL found in mentions.
+ * Returns null if no G2 product page was found in the Google search results.
+ *
+ * Uses the Google search result that came from the `"company" site:g2.com`
+ * query, which reliably returns the canonical G2 URL — no slug guessing.
+ */
+export function extractG2UrlFromMentions(
+  mentions: PublicMention[]
+): string | null {
+  const match = mentions.find((m) =>
+    /g2\.com\/products\/[^/]+\/reviews/.test(m.url ?? "")
+  );
+  return match?.url ?? null;
 }
 
 /**
- * Convert raw Product Hunt scraper items into ProductHuntEntry[].
- * Caps at 5 entries.
+ * Derive basic ProductHuntEntry records from Google search mentions.
+ *
+ * Because no Apify Product Hunt actor supports company-name search (they are
+ * all date-based scrapers), we instead add a `site:producthunt.com` query to
+ * the Google search pass and extract structured data from the result snippets.
+ * Upvotes and commentsCount are unavailable via this path and default to 0.
  */
-export function normalizeProductHuntEntries(
-  items: unknown[]
+export function extractProductHuntEntriesFromMentions(
+  mentions: PublicMention[]
 ): ProductHuntEntry[] {
-  const entries: ProductHuntEntry[] = [];
-
-  for (const raw of items.slice(0, 5)) {
-    const item = raw as RawProductHuntEntry;
-    const name = item.name ?? "";
-    const tagline = item.tagline ?? item.description ?? "";
-    if (!name) continue;
-
-    const topics = (item.topics ?? []).map((t) =>
-      typeof t === "string" ? t : (t.name ?? "")
-    ).filter(Boolean);
-
-    entries.push({
-      name,
-      tagline: truncate(tagline, 150),
-      upvotes: item.votesCount ?? item.upvotes ?? 0,
-      commentsCount: item.commentsCount ?? 0,
-      topics,
-      url: item.url,
-    });
-  }
-
-  return entries;
+  return mentions
+    .filter((m) => /producthunt\.com\/posts\//.test(m.url ?? ""))
+    .slice(0, 5)
+    .map((m) => ({
+      name: m.title ?? "",
+      tagline: m.snippet ?? "",
+      upvotes: 0,
+      commentsCount: 0,
+      topics: [],
+      url: m.url,
+    }))
+    .filter((e) => e.name !== "");
 }
 
 // ─── Autocomplete normalizer ──────────────────────────────────────────────────

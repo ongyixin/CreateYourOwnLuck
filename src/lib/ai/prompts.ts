@@ -285,7 +285,6 @@ const LIMITS = {
   maxReviews: 10,
   socialMention: 200,
   maxSocialMentions: 10,
-  jobSummary: 800,
   video: 200,
   maxVideos: 5,
   productHunt: 500,
@@ -408,44 +407,6 @@ export function formatContext(request: AnalysisRequest, data: ScrapedData): stri
     parts.push(`## Google Autocomplete Signals\nWhat people search for alongside this brand:\n${truncate(suggestions, LIMITS.autocomplete)}`);
   }
 
-  // Job postings — signals company strategy and hiring direction
-  if (data.jobPostings && data.jobPostings.length > 0) {
-    const jobs = data.jobPostings;
-
-    // Summarise by counting function areas from title keywords
-    const functionCounts: Record<string, number> = {};
-    for (const job of jobs) {
-      const t = job.title.toLowerCase();
-      if (/engineer|developer|backend|frontend|fullstack|infra|devops|ml|data/i.test(t)) {
-        functionCounts['Engineering'] = (functionCounts['Engineering'] ?? 0) + 1;
-      } else if (/sales|account executive|ae|bdr|sdr/i.test(t)) {
-        functionCounts['Sales'] = (functionCounts['Sales'] ?? 0) + 1;
-      } else if (/market|growth|demand|content|seo/i.test(t)) {
-        functionCounts['Marketing'] = (functionCounts['Marketing'] ?? 0) + 1;
-      } else if (/product|pm|ux|design/i.test(t)) {
-        functionCounts['Product/Design'] = (functionCounts['Product/Design'] ?? 0) + 1;
-      } else if (/customer success|support|cs/i.test(t)) {
-        functionCounts['Customer Success'] = (functionCounts['Customer Success'] ?? 0) + 1;
-      } else {
-        functionCounts['Other'] = (functionCounts['Other'] ?? 0) + 1;
-      }
-    }
-
-    const summary = Object.entries(functionCounts)
-      .sort(([, a], [, b]) => b - a)
-      .map(([fn, count]) => `${count} ${fn}`)
-      .join(', ');
-
-    const notableJobs = jobs
-      .slice(0, 5)
-      .map((j) => `- ${j.title}${j.location ? ` (${j.location})` : ''}`)
-      .join('\n');
-
-    parts.push(
-      `## Job Posting Signals\n${jobs.length} open roles: ${summary}\n\nNotable roles:\n${truncate(notableJobs + '\n' + jobs.slice(5).map((j) => `- ${j.title}`).join('\n'), LIMITS.jobSummary)}`,
-    );
-  }
-
   // YouTube video content
   if (data.videos && data.videos.length > 0) {
     const selected = data.videos.slice(0, LIMITS.maxVideos);
@@ -510,7 +471,7 @@ Focus on:
 - Rank audience segments by how strongly the current brand resonates with them.
 - Identify buying triggers: the specific moments or events that push someone to purchase.
 
-Where available, use structured reviews (reviewer roles from G2/Trustpilot reveal who's actually buying), job postings (signals company size and industry of buyers), and Twitter/X mentions (language patterns reveal real customer context). Product Hunt topics and autocomplete signals indicate how customers categorise this product.
+Where available, use structured reviews (reviewer roles from G2/Trustpilot reveal who's actually buying) and Twitter/X mentions (language patterns reveal real customer context). Product Hunt topics and autocomplete signals indicate how customers categorise this product.
 
 Do NOT produce stock personas like "SMB decision maker". Be specific about role, company stage, context, and what makes this person different. Draw on competitor positioning and public mentions to triangulate.
 
@@ -546,7 +507,7 @@ Based on ICP signals from the brand positioning and market signals from public m
 - Identify creators, podcasts, or newsletters with genuine audience overlap
 - Avoid generic recommendations like "go to LinkedIn" — prefer specific, actionable channels
 
-If public mentions reference Reddit threads, Hacker News posts, or review sites, use them to justify community suggestions. YouTube channels covering this product type are strong signals for creator partnerships. Product Hunt topics and job posting signals reveal which industries and buyer roles are most active.
+If public mentions reference Reddit threads, Hacker News posts, or review sites, use them to justify community suggestions. YouTube channels covering this product type are strong signals for creator partnerships. Product Hunt topics reveal which industries and buyer roles are most active.
 
 ---
 
