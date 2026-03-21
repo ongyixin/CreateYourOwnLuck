@@ -1,0 +1,414 @@
+// ============================================================
+// FitCheck — Shared TypeScript Contracts
+// Owned by: foundation agent
+// Do not add API/Apify/AI/component logic here.
+// ============================================================
+
+// ------------------------------------------------------------
+// 1. Analysis Request (user input)
+// ------------------------------------------------------------
+
+export interface AnalysisRequest {
+  companyName: string;
+  websiteUrl: string;
+
+  /** Extra context pasted or uploaded as text (pitch deck, marketing copy, etc.) */
+  extraMaterials?: string;
+
+  /** Up to 3 competitor URLs */
+  competitorUrls?: string[];
+
+  /** Optional goal statement: "We want to move upmarket", "Launch in Europe", etc. */
+  goal?: string;
+}
+
+// ------------------------------------------------------------
+// 2. Job lifecycle
+// ------------------------------------------------------------
+
+export type JobStatus =
+  | "pending"   // created, not yet started
+  | "running"   // pipeline in progress
+  | "complete"  // report ready
+  | "failed";   // unrecoverable error
+
+/** Each named stage in the pipeline, in order. */
+export type PipelineStage =
+  | "crawl_company"
+  | "crawl_competitors"
+  | "search_mentions"
+  | "scrape_reviews"
+  | "scrape_social"
+  | "scrape_enrichment"
+  | "analyze_brand"
+  | "analyze_icp"
+  | "analyze_actionables"
+  | "analyze_leads"
+  | "analyze_personas"
+  | "build_report";
+
+export const PIPELINE_STAGES: PipelineStage[] = [
+  "crawl_company",
+  "crawl_competitors",
+  "search_mentions",
+  "scrape_reviews",
+  "scrape_social",
+  "scrape_enrichment",
+  "analyze_brand",
+  "analyze_icp",
+  "analyze_actionables",
+  "analyze_leads",
+  "analyze_personas",
+  "build_report",
+];
+
+export type StageStatus = "pending" | "running" | "complete" | "skipped" | "failed";
+
+export interface ProgressStage {
+  stage: PipelineStage;
+  status: StageStatus;
+  /** Human-readable label shown in the progress UI */
+  label: string;
+  /** ISO timestamp when this stage started */
+  startedAt?: string;
+  /** ISO timestamp when this stage completed or failed */
+  completedAt?: string;
+  /** Optional warning/info message (e.g., "Scrape returned 0 pages") */
+  message?: string;
+}
+
+export interface AnalysisJob {
+  id: string;
+  status: JobStatus;
+  request: AnalysisRequest;
+  stages: ProgressStage[];
+  /** 0–100 overall progress percentage */
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Set on fatal failure */
+  error?: string;
+  /** Set when status === "complete" */
+  report?: FitCheckReport;
+}
+
+// ------------------------------------------------------------
+// 3. SSE event payload (streamed from GET /api/status/[id])
+// ------------------------------------------------------------
+
+export interface StatusEvent {
+  jobId: string;
+  status: JobStatus;
+  progress: number;
+  stages: ProgressStage[];
+  /** Populated only in the final "complete" event */
+  report?: FitCheckReport;
+  error?: string;
+}
+
+// ------------------------------------------------------------
+// 4. Scraped / normalized data
+// ------------------------------------------------------------
+
+export interface ScrapedPage {
+  url: string;
+  title?: string;
+  /** Cleaned markdown content, truncated to avoid context overflow */
+  content: string;
+  scrapedAt: string;
+}
+
+export interface PublicMention {
+  url: string;
+  source: "reddit" | "hackernews" | "g2" | "trustpilot" | "news" | "other";
+  title?: string;
+  snippet: string;
+  scrapedAt: string;
+}
+
+export interface StructuredReview {
+  platform: "g2" | "trustpilot";
+  rating: number;
+  title?: string;
+  pros?: string;
+  cons?: string;
+  reviewText: string;
+  reviewerRole?: string;
+  date?: string;
+  url?: string;
+}
+
+export interface SocialMention {
+  platform: "twitter";
+  text: string;
+  authorHandle?: string;
+  likes?: number;
+  date?: string;
+  url?: string;
+}
+
+export interface JobPosting {
+  title: string;
+  company: string;
+  location?: string;
+  /** Truncated job description */
+  description: string;
+  url?: string;
+}
+
+export interface VideoResult {
+  title: string;
+  channelName: string;
+  viewCount?: number;
+  /** Truncated description */
+  description: string;
+  url: string;
+}
+
+export interface ProductHuntEntry {
+  name: string;
+  tagline: string;
+  upvotes: number;
+  commentsCount: number;
+  topics: string[];
+  url?: string;
+}
+
+export interface ScrapedData {
+  companyPages: ScrapedPage[];
+  competitorPages: ScrapedPage[];
+  mentions: PublicMention[];
+  /** Structured reviews from G2 and Trustpilot */
+  reviews?: StructuredReview[];
+  /** Twitter/X mentions */
+  socialMentions?: SocialMention[];
+  /** Job postings — signals company strategy and growth areas */
+  jobPostings?: JobPosting[];
+  /** YouTube search results for brand/product content */
+  videos?: VideoResult[];
+  /** Product Hunt launches */
+  productHuntEntries?: ProductHuntEntry[];
+  /** Google autocomplete suggestions (e.g. "companyname pricing") */
+  autocompleteSuggestions?: string[];
+  /** Any scraping warnings, e.g. "competitor X timed out" */
+  warnings: string[];
+}
+
+// ------------------------------------------------------------
+// 5. Report section — shared primitives
+// ------------------------------------------------------------
+
+/** A piece of evidence anchoring an insight to real data */
+export interface Evidence {
+  quote: string;
+  sourceUrl?: string;
+  sourceLabel?: string; // e.g. "Company homepage", "Reddit r/startups"
+}
+
+// ------------------------------------------------------------
+// 5a. Brand Perception
+// ------------------------------------------------------------
+
+export interface BrandPerception {
+  /** Short adjectives/phrases the brand projects: e.g. ["modern", "technical", "niche"] */
+  toneAndIdentity: string[];
+  perceivedStrengths: BrandInsight[];
+  weakOrConfusingSignals: BrandInsight[];
+  /** 0–100 consistency score */
+  consistencyScore: number;
+  /** One-sentence summary for the UI hero */
+  summary: string;
+}
+
+export interface BrandInsight {
+  title: string;
+  description: string;
+  evidence: Evidence[];
+}
+
+// ------------------------------------------------------------
+// 5b. ICP Assessment
+// ------------------------------------------------------------
+
+export interface IcpAssessment {
+  profiles: IcpProfile[];
+  /** Segments ranked best-fit first */
+  audienceSegments: AudienceSegment[];
+  summary: string;
+}
+
+export interface IcpProfile {
+  name: string; // e.g. "Early-stage SaaS Founder"
+  description: string;
+  painPoints: string[];
+  motivations: string[];
+  buyingTriggers: string[];
+  fitScore: number; // 0–100
+  evidence: Evidence[];
+}
+
+export interface AudienceSegment {
+  label: string;
+  fitScore: number; // 0–100
+  rationale: string;
+}
+
+// ------------------------------------------------------------
+// 5c. Brand Direction Actionables
+// ------------------------------------------------------------
+
+export interface Actionables {
+  whatToImprove: Actionable[];
+  whatToChange: Actionable[];
+  whatToLeanInto: Actionable[];
+  messagingAngles: MessagingAngle[];
+  copySuggestions: CopySuggestion[];
+}
+
+export interface Actionable {
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  evidence: Evidence[];
+}
+
+export interface MessagingAngle {
+  angle: string;
+  rationale: string;
+  exampleHeadline?: string;
+}
+
+export interface CopySuggestion {
+  placement: string; // e.g. "Homepage hero", "CTA button", "Ad headline"
+  before: string;
+  after: string;
+  rationale: string;
+}
+
+// ------------------------------------------------------------
+// 5d. Customer and Lead Suggestions
+// ------------------------------------------------------------
+
+export interface LeadSuggestions {
+  customerTypes: CustomerType[];
+  communities: Community[];
+  targetCompanyProfiles: TargetCompanyProfile[];
+  creatorChannels: CreatorChannel[];
+}
+
+export interface CustomerType {
+  role: string;        // e.g. "Growth Marketer"
+  companySizes: string[]; // e.g. ["Seed", "Series A"]
+  industries: string[];
+  rationale: string;
+}
+
+export interface Community {
+  name: string;
+  platform: string; // "Reddit", "Slack", "Discord", "Forum", etc.
+  url?: string;
+  rationale: string;
+}
+
+export interface TargetCompanyProfile {
+  description: string;
+  exampleTypes: string[];
+  rationale: string;
+}
+
+export interface CreatorChannel {
+  name: string;
+  type: "podcast" | "newsletter" | "influencer" | "youtube" | "other";
+  url?: string;
+  rationale: string;
+}
+
+// ------------------------------------------------------------
+// 5e. ICP Studio
+// ------------------------------------------------------------
+
+export interface IcpStudio {
+  personas: Persona[];
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  /** Short title, e.g. "Indie Hacker, 3-person startup" */
+  title: string;
+  age?: number;
+  psychographics: string[];
+  painPoints: string[];
+  buyingTriggers: string[];
+  /** How this persona would react to the homepage in ~5 seconds */
+  fiveSecondReaction: FiveSecondReaction;
+  /** Gaps between current brand and what this persona cares about */
+  painPointGaps: string[];
+  evidence: Evidence[];
+}
+
+export interface FiveSecondReaction {
+  /** "positive" | "neutral" | "confused" | "negative" */
+  sentiment: "positive" | "neutral" | "confused" | "negative";
+  /** First-person simulated reaction, 1–2 sentences */
+  reaction: string;
+  /** What caught their eye first */
+  firstImpression: string;
+  /** What they'd do next: "Sign up", "Keep scrolling", "Close tab", etc. */
+  likelyAction: string;
+}
+
+// ------------------------------------------------------------
+// 6. Full Report
+// ------------------------------------------------------------
+
+export interface FitCheckReport {
+  jobId: string;
+  companyName: string;
+  websiteUrl: string;
+  generatedAt: string;
+
+  brandPerception: BrandPerception;
+  icpAssessment: IcpAssessment;
+  actionables: Actionables;
+  leadSuggestions: LeadSuggestions;
+  icpStudio: IcpStudio;
+
+  /** Non-fatal warnings from the pipeline (partial scrape failures, etc.) */
+  warnings: string[];
+}
+
+// ------------------------------------------------------------
+// 7. API response shapes
+// ------------------------------------------------------------
+
+export interface AnalyzeResponse {
+  jobId: string;
+}
+
+/** Returned by GET /api/report/[id] when still pending */
+export interface PendingReportResponse {
+  status: "pending" | "running";
+  progress: number;
+}
+
+export type ReportResponse = FitCheckReport | PendingReportResponse;
+
+// ------------------------------------------------------------
+// 8. Pipeline stage labels (UI display)
+// ------------------------------------------------------------
+
+export const STAGE_LABELS: Record<PipelineStage, string> = {
+  crawl_company:       "Crawling company website...",
+  crawl_competitors:   "Scraping competitor sites...",
+  search_mentions:     "Searching for public mentions and reviews...",
+  scrape_reviews:      "Scraping structured reviews (G2, Trustpilot)...",
+  scrape_social:       "Scraping social media mentions...",
+  scrape_enrichment:   "Gathering job postings, videos, and Product Hunt data...",
+  analyze_brand:       "Running AI brand analysis...",
+  analyze_icp:         "Generating ICP profiles...",
+  analyze_actionables: "Building brand direction actionables...",
+  analyze_leads:       "Finding customer and lead suggestions...",
+  analyze_personas:    "Building ICP Studio personas...",
+  build_report:        "Assembling final report...",
+};
