@@ -288,9 +288,6 @@ export function normalizeTweets(items: unknown[]): SocialMention[] {
       item.public_metrics?.like_count ??
       0;
 
-    // Filter noise — skip very low engagement
-    if (likes < 2) continue;
-
     const handle =
       item.author?.username ??
       item.user?.screen_name ??

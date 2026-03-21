@@ -32,7 +32,7 @@ function getChatModel() {
   if (provider === 'gemini') {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-    return createGoogleGenerativeAI({ apiKey })('gemini-2.0-flash');
+    return createGoogleGenerativeAI({ apiKey })('gemini-2.5-flash');
   }
 
   if (provider === 'anthropic') {
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       system: systemPrompt,
       messages,
       temperature: 0.7,
-      maxOutputTokens: 300,
+      maxOutputTokens: 1024,
     });
 
     return NextResponse.json({ reply: result.text });

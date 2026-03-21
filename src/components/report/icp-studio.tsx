@@ -86,10 +86,14 @@ function PersonaChat({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [history, loading]);
 
   useEffect(() => {
@@ -163,7 +167,7 @@ function PersonaChat({
 
       {/* Message log */}
       <div className="mx-5 mb-3 rounded-lg bg-zinc-900/60 border border-zinc-800/60 overflow-hidden">
-        <div className="max-h-72 overflow-y-auto p-3 space-y-3">
+        <div ref={scrollContainerRef} className="max-h-72 overflow-y-auto p-3 space-y-3">
           {history.length === 0 && (
             <p className="text-zinc-600 text-xs text-center py-4">
               Ask {persona.name} anything — about their workflow, frustrations,

@@ -10,7 +10,7 @@ export const ACTORS = {
   WEBSITE_CRAWLER: "apify/website-content-crawler",
   GOOGLE_SEARCH: "apify/google-search-scraper",
   TWEET_SCRAPER: "apidojo/tweet-scraper",
-  G2_SCRAPER: "apify/g2-scraper",
+  G2_SCRAPER: "misceres/g2-scraper",
   TRUSTPILOT_SCRAPER: "automation-lab/trustpilot-scraper",
   JOB_SCRAPER: "bebity/linkedin-jobs-scraper",
   YOUTUBE_SCRAPER: "streamers/youtube-scraper",
@@ -77,7 +77,7 @@ export function buildTweetSearchInput(
   return {
     searchTerms: [companyName],
     maxTweets,
-    queryType: "Latest",
+    queryType: "Top",
   };
 }
 
