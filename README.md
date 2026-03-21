@@ -2,216 +2,225 @@
 
 AI-powered brand perception and ideal customer profile analysis, grounded in live web data.
 
-## The Problem
-
-Startups and businesses often struggle with branding and positioning because they rely on instinct, internal opinions, or outdated market research. They don't know whether their brand is clear or confusing, whether they're appealing to the right customer segment, what differentiates them from competitors, or what messaging changes would actually improve conversion.
-
-Most existing tools are static or generic. FitCheck is different because it uses fresh, real-time web data alongside the company's own materials to deliver actionable, evidence-backed insights.
-
-## Who it's for
-
-- Startups validating their positioning
-- Indie hackers refining their brand
-- SaaS products entering a new market or audience segment
-- Small businesses trying to understand their competitive landscape
-- Founders and teams who want data-driven branding decisions instead of guesswork
+FitCheck scrapes your website, competitors, reviews, social mentions, and public discussions using [Apify](https://apify.com), then runs five parallel AI analyses to produce an evidence-backed report with actionable branding and positioning recommendations.
 
 ## Features
 
-### 1. Brand Perception Analysis
+- **Brand Perception Analysis** — tone, perceived strengths, weak signals, and a consistency score derived from your site and public mentions
+- **Ideal Customer Profile (ICP) Assessment** — data-driven personas ranked by fit, with inferred pain points, motivations, and buying triggers
+- **Brand Direction Actionables** — concrete recommendations: what to improve, what to change, what to lean into, with before/after copy suggestions
+- **Customer & Lead Suggestions** — target customer types, communities, companies, and creator channels worth reaching
+- **ICP Studio** — AI-generated personas with simulated 5-second reactions to your homepage and pain-point gap analysis
 
-Understand how your brand actually comes across — not how you think it does. FitCheck analyzes your website, marketing materials, and public mentions to assess:
+## Quickstart
 
-- **Current tone and identity** — The adjectives and impressions your brand projects
-- **Perceived strengths** — What you're doing well, backed by evidence from your site and public discussions
-- **Weak or confusing signals** — Where your messaging is unclear, contradictory, or missing
-- **Consistency score** — How well your brand holds together across your website, ads, docs, and public presence
-
-### 2. Ideal Customer Profile (ICP) Assessment
-
-Discover who your product is actually resonating with and who it should be targeting:
-
-- **Likely ideal customer profiles** — Data-driven personas based on your positioning and market signals
-- **Audience segments ranked by fit** — Which customer types are most aligned with your current brand
-- **Inferred pain points and motivations** — What problems your ideal customers face and what drives their purchasing decisions
-- **Buying triggers** — The specific moments, events, or frustrations that push your ideal customers to seek a solution
-
-### 3. Brand Direction Actionables
-
-Get concrete recommendations on what to change, not just what's wrong:
-
-- **What to improve** — Specific weaknesses to address with suggested fixes
-- **What to change** — Messaging that's actively hurting your positioning
-- **What to lean into** — Strengths you're underutilizing
-- **Recommended messaging angles** — New ways to frame your value proposition
-- **Homepage, ad, and copy suggestions** — Before/after examples you can implement immediately
-
-### 4. Customer and Lead Suggestions
-
-Know where to find the people most likely to buy:
-
-- **Relevant customer types** — Specific roles, company sizes, and industries to target
-- **Communities where they hang out** — Subreddits, Slack groups, Discord servers, forums
-- **Companies or leads to target** — Types of organizations that match your ICP
-- **Creators, channels, and ecosystems** — Influencers, podcasts, newsletters, and platforms worth reaching
-
-### 5. ICP Studio
-
-Test your messaging against AI-generated customer personas grounded in real web evidence:
-
-- **2-3 fictional but evidence-backed personas** — Each with a name, psychographics, pain points, and buying triggers
-- **Simulated 5-second reactions** — How each persona would react to your homepage or pitch at first glance
-- **Pain-point matching** — Identifies gaps between your current branding and what your customers actually care about
-- **Focus group mode** — Test new messaging ideas, landing page copy, or product positioning against your personas
-
-## User Flow
-
-### Step 1: Submit your company info
-
-Enter your company name and website URL. This is the only required input — everything else is optional but improves the analysis.
-
-### Step 2: Add materials (optional)
-
-Upload or paste additional context: pitch decks, product screenshots, marketing copy, demo videos, product docs, or a GitHub repo link. The more context FitCheck has, the richer the analysis.
-
-### Step 3: Add competitors (optional)
-
-Provide URLs for 1-3 competitors. FitCheck will crawl their sites and factor their positioning into your analysis, surfacing what differentiates you and where you overlap.
-
-### Step 4: State your goal (optional)
-
-Tell FitCheck what you're trying to achieve: "We want to move upmarket," "We're launching in Europe," "We need to stand out from [competitor]." This focuses the recommendations on what matters most to you.
-
-### Step 5: Watch the analysis happen
-
-A real-time progress screen shows each stage of the pipeline as it runs:
-
-```
-[====] Crawling company website...
-[======] Scraping competitor sites...
-[=========] Searching for public mentions and reviews...
-[============] Running AI brand analysis...
-[==============] Generating ICP profiles...
-[================] Building personas...
-[==================] Report ready!
+```bash
+git clone <repo-url> && cd CreateYourOwnLuck
+npm install
+cp .env.example .env.local
+# Fill in API keys (see Environment Variables below)
+npm run dev
 ```
 
-### Step 6: Review your FitCheck report
+Open [http://localhost:3000](http://localhost:3000).
 
-A visual, interactive report with all 5 sections. Each insight is grounded in real evidence from your website, competitors, and public web data — not generic advice.
+## Environment Variables
 
-## How it works
+Create `.env.local` from `.env.example`:
 
+| Variable | Required | Description |
+|---|---|---|
+| `APIFY_TOKEN` | Yes | Apify API token — powers all web scraping |
+| `AI_PROVIDER` | Yes | `anthropic`, `openai`, or `gemini` |
+| `ANTHROPIC_API_KEY` | If provider is `anthropic` | Key for Claude (`claude-sonnet-4-6`) |
+| `OPENAI_API_KEY` | If provider is `openai` | Key for GPT-4o |
+| `GEMINI_API_KEY` | If provider is `gemini` | Key for Gemini 2.5 Pro |
+
+## How It Works
+
+### User Flow
+
+1. **Submit company info** — company name and website URL (required)
+2. **Add materials** (optional) — paste pitch decks, marketing copy, product docs
+3. **Add competitors** (optional) — up to 3 competitor URLs
+4. **State a goal** (optional) — e.g. "We want to move upmarket"
+5. **Watch the analysis** — real-time progress via SSE shows each pipeline stage
+6. **Review the report** — tabbed, interactive report with five sections
+
+### Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client
+        Landing["/ Landing Page"]
+        Form["/analyze Form"]
+        Progress["/processing/[id] SSE Progress"]
+        Report["/report/[id] Report View"]
+    end
+
+    subgraph API["Next.js API Routes"]
+        Analyze["POST /api/analyze"]
+        Status["GET /api/status/[id]"]
+        ReportAPI["GET /api/report/[id]"]
+    end
+
+    subgraph Pipeline["Pipeline Runner"]
+        Store["In-Memory Job Store"]
+        Scrape["Apify Orchestrator"]
+        AI["AI Section Generators"]
+    end
+
+    Landing --> Form
+    Form -->|POST| Analyze
+    Analyze -->|"202 { jobId }"| Progress
+    Analyze -->|fire-and-forget| Pipeline
+    Progress -->|SSE| Status
+    Status --> Store
+    Progress -->|on complete| Report
+    Report --> ReportAPI
+    ReportAPI --> Store
+    Scrape -->|ScrapedData| AI
+    AI -->|FitCheckReport| Store
 ```
-User submits company info
-        │
-        ▼
-┌──────────────────────┐
-│   Apify Scraping     │  Website Content Crawler + Google Search Scraper
-│   Layer              │  Crawls company site, competitors, reviews, mentions
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   AI Analysis        │  Claude or GPT-4o (switchable)
-│   Layer              │  5 parallel analyses on scraped + uploaded data
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────┐
-│   FitCheck Report    │  Visual, actionable, evidence-backed
-└──────────────────────┘
-```
 
-### The pipeline in detail
+### Pipeline Detail
 
-1. **Company material ingestion** — Collects uploaded files, URLs, company info, competitor links, and business goals
-2. **Web intelligence layer (Apify)** — Crawls company pages, competitor sites, and searches for reviews, discussions, mentions, and market signals across the public web
-3. **AI synthesis layer** — Uses LLMs to generate brand perception analysis, ICP hypotheses, strengths/weaknesses, recommended changes, and synthetic persona reactions
-4. **Report generation** — Structures all findings into a visual, interactive report with evidence citations
+The pipeline runs as a fire-and-forget async function triggered by `POST /api/analyze`. Progress updates stream to the client via SSE at `GET /api/status/[id]`.
 
-## Apify Integration
+**Stage 1 — Web Scraping (parallel via Apify)**
 
-Apify is the core data engine — not a bolt-on. It powers all web intelligence collection:
+All 10 Apify tasks run concurrently using `Promise.allSettled`. Individual failures produce warnings but never crash the pipeline.
 
-- **`apify/website-content-crawler`** — Crawls company and competitor websites, extracting content as clean markdown. Runs with the Cheerio crawler for speed, configured to capture up to 8 pages per company site and 4 per competitor.
-- **`apify/google-search-scraper`** — Searches for public mentions across Reddit, Hacker News, G2, Trustpilot, and the broader web. Runs targeted queries like `"company name" reviews`, `"company name" site:reddit.com`, and `company name vs competitors`.
+| Apify Actor | Data Collected | Limits |
+|---|---|---|
+| `apify/website-content-crawler` | Company site pages as markdown | 8 pages, Cheerio crawler |
+| `apify/website-content-crawler` | Competitor site pages | 4 pages per competitor |
+| `apify/google-search-scraper` | Reddit, HN, G2, Trustpilot, news mentions | 8 results/query, 1 page |
+| `apidojo/tweet-scraper` | Twitter/X mentions | 30 tweets |
+| `misceres/g2-scraper` | Structured G2 reviews | 15 reviews |
+| `epctex/trustpilot-scraper` | Structured Trustpilot reviews | 15 reviews |
+| `helloitsjoe/linkedin-jobs-scraper` | Job postings (strategy signals) | 15 postings |
+| `streamers/youtube-scraper` | YouTube videos about the brand | 10 results |
+| `epctex/product-hunt-scraper` | Product Hunt launches | 5 entries |
+| `emastra/google-autocomplete-scraper` | Autocomplete suggestions | US/English |
 
-All Apify actors run in parallel using `Promise.allSettled` for resilience. If any individual scrape fails or times out (120s limit), the pipeline continues with whatever data was successfully collected. Partial data produces a less detailed but still useful report.
+Scraped data is normalized (truncated to prevent context overflow, URLs deduplicated, mentions tagged by source) before passing to AI.
 
-The scraped data is normalized into a structured format — pages truncated to prevent context window overflow, URLs deduplicated, mentions tagged by source — before being passed to the AI analysis layer.
+**Stage 2 — AI Analysis (parallel)**
+
+Five section generators run concurrently via `Promise.allSettled`. Each uses the Vercel AI SDK's `generateObject` with Zod schemas for structured output:
+
+| Section | Generator | Output |
+|---|---|---|
+| Brand Perception | `generateBrandPerception` | Tone, strengths, weak signals, consistency score |
+| ICP Assessment | `generateIcpAssessment` | Customer profiles ranked by fit score |
+| Actionables | `generateActionables` | Improvements, changes, messaging angles, copy suggestions |
+| Lead Suggestions | `generateLeadSuggestions` | Customer types, communities, target companies, creator channels |
+| ICP Studio | `generateIcpStudio` | Personas with 5-second reactions and pain-point gaps |
+
+If any section fails, a fallback empty structure is used so the report still renders.
+
+**Stage 3 — Report Assembly**
+
+All sections are combined into a `FitCheckReport` and stored in the in-memory job store. Warnings from scraping and AI failures are included in the report.
+
+## API Routes
+
+| Method | Route | Status | Description |
+|---|---|---|---|
+| `POST` | `/api/analyze` | 202 | Accepts `{ companyName, websiteUrl, extraMaterials?, competitorUrls?, goal? }`. Returns `{ jobId }`. |
+| `GET` | `/api/status/[id]` | 200 | SSE stream. Emits `StatusEvent` every 500ms until `complete` or `failed`. |
+| `GET` | `/api/report/[id]` | 200/202/404 | Returns `FitCheckReport` (200), `{ status, progress }` (202 if pending), or 404. Supports `id=demo` for a built-in demo report. |
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
-| Framework | Next.js (App Router, fullstack) |
-| UI | Tailwind CSS + shadcn/ui |
-| Web data | Apify (website crawler + search scraper) |
-| AI | Vercel AI SDK (Anthropic Claude / OpenAI GPT-4o / Google Gemini) |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| UI | Tailwind CSS + shadcn/ui + Radix primitives |
+| Icons | Lucide React |
+| Web Data | Apify (9 actors — see pipeline detail above) |
+| AI | Vercel AI SDK (`ai` v4) with Anthropic / OpenAI / Google providers |
+| Validation | Zod schemas for both API input and AI structured output |
 | Real-time | Server-Sent Events (SSE) for progress tracking |
-| Storage | In-memory (hackathon MVP) |
-| Deploy | Vercel |
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- Apify account + API token
-- Anthropic or OpenAI API key
-
-### Setup
-
-```bash
-npm install
-cp .env.example .env.local
-# Fill in your API keys in .env.local
-npm run dev
-```
-
-### Environment variables
-
-```
-APIFY_TOKEN=apify_api_xxxxx
-AI_PROVIDER=anthropic          # or 'openai' / 'gemini'
-ANTHROPIC_API_KEY=sk-ant-xxxxx
-OPENAI_API_KEY=sk-xxxxx
-GEMINI_API_KEY=xxxxx
-```
+| State | In-memory `Map<string, AnalysisJob>` (resets on server restart) |
+| Deploy | Vercel-ready (no custom config needed) |
 
 ## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # Landing page
-│   ├── analyze/page.tsx            # Multi-step onboarding form
-│   ├── processing/[id]/page.tsx    # Real-time progress tracker (SSE)
-│   ├── report/[id]/page.tsx        # Report view with all 5 sections
+│   ├── page.tsx                    # Landing page — renders Hero
+│   ├── layout.tsx                  # Root layout
+│   ├── globals.css                 # Tailwind base + custom CSS variables
+│   ├── analyze/page.tsx            # 4-step onboarding form
+│   ├── processing/[id]/page.tsx    # SSE progress tracker
+│   ├── report/[id]/page.tsx        # Tabbed report view
 │   └── api/
-│       ├── analyze/route.ts        # POST: Accept form, kick off pipeline
-│       ├── status/[id]/route.ts    # GET: SSE stream for progress updates
-│       └── report/[id]/route.ts    # GET: Fetch completed report
+│       ├── analyze/route.ts        # POST — start pipeline, return jobId
+│       ├── status/[id]/route.ts    # GET — SSE stream of progress
+│       └── report/[id]/route.ts    # GET — fetch completed report
 ├── lib/
-│   ├── types.ts                    # Shared TypeScript types
+│   ├── types.ts                    # All shared TypeScript types and constants
+│   ├── utils.ts                    # cn() helper (clsx + tailwind-merge)
 │   ├── apify/
-│   │   ├── client.ts               # Apify API wrapper
-│   │   ├── actors.ts               # Actor IDs and input builders
-│   │   ├── orchestrator.ts         # Parallel scraping orchestration
-│   │   └── normalizer.ts           # Raw data → structured format
+│   │   ├── client.ts               # runActor() — Apify API wrapper (120s timeout)
+│   │   ├── actors.ts               # Actor IDs + input builders for all 9 actors
+│   │   ├── orchestrator.ts         # scrapeAll() — parallel scraping orchestration
+│   │   └── normalizer.ts           # Raw Apify output → typed ScrapedData
 │   ├── ai/
-│   │   ├── provider.ts             # AI provider abstraction (Claude/GPT)
-│   │   └── prompts.ts              # Prompt templates for all 5 report sections
+│   │   ├── provider.ts             # AI model selection + 5 section generators
+│   │   └── prompts.ts              # Zod schemas + prompt builders + SYSTEM_PROMPT
 │   └── pipeline/
-│       ├── runner.ts               # Full pipeline: scrape → analyze → report
-│       └── store.ts                # In-memory job state store
+│       ├── runner.ts               # runPipeline() — scrape → analyze → report
+│       └── store.ts                # In-memory job store (Map-based)
 └── components/
-    ├── ui/                         # shadcn/ui primitives
-    ├── landing/                    # Hero and landing page components
+    ├── ui/                         # shadcn/ui primitives (button, card, badge, etc.)
+    ├── landing/hero.tsx            # Landing page hero + feature grid
     ├── form/                       # Multi-step onboarding wizard
-    ├── processing/                 # Progress tracker with animations
-    └── report/                     # 5 report section components
+    │   ├── step-indicator.tsx      # Step progress indicator
+    │   ├── company-info-step.tsx   # Step 1: company name + URL
+    │   ├── materials-step.tsx      # Step 2: extra materials
+    │   ├── competitors-step.tsx    # Step 3: competitor URLs
+    │   └── goal-step.tsx           # Step 4: business goal
+    ├── processing/
+    │   └── progress-tracker.tsx    # Stage groups with animated status icons
+    └── report/
+        ├── report-header.tsx       # Company name, URL, date, share/export
+        ├── brand-perception.tsx    # Brand Perception tab
+        ├── icp-assessment.tsx      # ICP Assessment tab
+        ├── actionables.tsx         # Actionables tab
+        ├── lead-suggestions.tsx    # Lead Suggestions tab
+        ├── icp-studio.tsx          # ICP Studio tab
+        └── evidence-block.tsx      # Reusable evidence citation component
+```
+
+## Extending
+
+- **Add a new AI provider** — add a branch in `getModel()` in `src/lib/ai/provider.ts`
+- **Add a new report section** — define a Zod schema + prompt builder in `prompts.ts`, add a generator in `provider.ts`, add a stage to `PIPELINE_STAGES` in `types.ts`, wire it into `runner.ts`, and create a report component
+- **Add a new data source** — add an actor ID and input builder in `actors.ts`, add a normalizer in `normalizer.ts`, add the scrape task in `orchestrator.ts`
+- **Persistent storage** — replace the in-memory `Map` in `store.ts` with a database adapter
+
+## Troubleshooting
+
+| Problem | Cause | Fix |
+|---|---|---|
+| `APIFY_TOKEN is not set` | Missing env var | Add `APIFY_TOKEN` to `.env.local` |
+| `ANTHROPIC_API_KEY is not set` | Missing API key for selected provider | Set the key matching your `AI_PROVIDER` value |
+| Report shows empty sections | Individual AI section timed out or errored | Check the `warnings` array in the report JSON; retry the analysis |
+| Scrape returned 0 pages | Target site blocks bots or URL is invalid | Verify the URL loads in a browser; some sites require JS rendering (Cheerio crawler is used by default) |
+| Job state lost after restart | In-memory store does not persist | Expected for MVP; see Extending section for adding persistent storage |
+| Pipeline hangs on Vercel | Serverless function times out before pipeline completes | Wrap `runPipeline()` in `waitUntil()` from `@vercel/functions` (noted in `route.ts`) |
+
+## Scripts
+
+```bash
+npm run dev       # Start development server
+npm run build     # Production build
+npm run start     # Start production server
+npm run lint      # Run ESLint
 ```
 
 ## License
