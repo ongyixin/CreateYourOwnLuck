@@ -10,7 +10,9 @@ import { CompanyInfoStep } from "@/components/form/company-info-step";
 import { MaterialsStep } from "@/components/form/materials-step";
 import { CompetitorsStep } from "@/components/form/competitors-step";
 import { GoalStep } from "@/components/form/goal-step";
-import type { AnalysisRequest, AnalyzeResponse } from "@/lib/types";
+import { SourcesStep } from "@/components/form/sources-step";
+import type { AnalysisRequest, AnalyzeResponse, ScraperSource } from "@/lib/types";
+import { ALL_SCRAPER_SOURCES } from "@/lib/types";
 
 // ─── Form state ───────────────────────────────────────────────────────────────
 
@@ -20,6 +22,7 @@ interface FormState {
   extraMaterials: string;
   competitorUrls: string[];
   goal: string;
+  selectedSources: ScraperSource[];
 }
 
 const INITIAL_FORM: FormState = {
@@ -28,6 +31,7 @@ const INITIAL_FORM: FormState = {
   extraMaterials: "",
   competitorUrls: [""],
   goal: "",
+  selectedSources: ALL_SCRAPER_SOURCES,
 };
 
 // ─── Steps config ─────────────────────────────────────────────────────────────
@@ -36,6 +40,7 @@ const STEPS = [
   { label: "Company", description: "Your company details" },
   { label: "Materials", description: "Additional context" },
   { label: "Competitors", description: "Competitor URLs" },
+  { label: "Sources", description: "Data sources to scrape" },
   { label: "Goal", description: "What to focus on" },
 ];
 
@@ -121,6 +126,7 @@ export default function AnalyzePage() {
         .map((u) => u.trim())
         .filter(Boolean),
       goal: form.goal.trim() || undefined,
+      selectedSources: form.selectedSources,
     };
 
     try {
@@ -233,6 +239,12 @@ export default function AnalyzePage() {
               />
             )}
             {step === 3 && (
+              <SourcesStep
+                data={{ selectedSources: form.selectedSources }}
+                onChange={(d) => setForm((f) => ({ ...f, ...d }))}
+              />
+            )}
+            {step === 4 && (
               <GoalStep
                 data={{ goal: form.goal }}
                 onChange={(d) => setForm((f) => ({ ...f, ...d }))}

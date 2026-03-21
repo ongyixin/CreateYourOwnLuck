@@ -8,6 +8,17 @@
 // 1. Analysis Request (user input)
 // ------------------------------------------------------------
 
+/** Data sources the user can opt in/out of during analysis. */
+export type ScraperSource = "google_search" | "reviews" | "twitter" | "enrichment";
+
+/** All selectable sources — used as the default when none are specified. */
+export const ALL_SCRAPER_SOURCES: ScraperSource[] = [
+  "google_search",
+  "reviews",
+  "twitter",
+  "enrichment",
+];
+
 export interface AnalysisRequest {
   companyName: string;
   websiteUrl: string;
@@ -20,6 +31,12 @@ export interface AnalysisRequest {
 
   /** Optional goal statement: "We want to move upmarket", "Launch in Europe", etc. */
   goal?: string;
+
+  /**
+   * Which optional data sources to scrape. Defaults to all sources if omitted.
+   * Company website is always scraped regardless of this setting.
+   */
+  selectedSources?: ScraperSource[];
 }
 
 // ------------------------------------------------------------

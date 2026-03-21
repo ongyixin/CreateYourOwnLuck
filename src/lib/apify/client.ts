@@ -36,18 +36,20 @@ function buildClient(): ApifyClient {
  * @param actorId   Full actor ID, e.g. "apify/website-content-crawler"
  * @param input     Actor input object (typed as-is; varies per actor)
  * @param timeoutSecs  Max seconds to wait for the run to finish
+ * @param memoryMbytes  Memory to allocate for the run in MB (default: 256)
  * @returns         Array of raw dataset items (unknown shape — normalize downstream)
  */
 export async function runActor(
   actorId: string,
   input: Record<string, unknown>,
-  timeoutSecs: number = DEFAULT_TIMEOUT_SECS
+  timeoutSecs: number = DEFAULT_TIMEOUT_SECS,
+  memoryMbytes: number = 256
 ): Promise<unknown[]> {
   const client = buildClient();
 
   const run = await client.actor(actorId).call(input, {
     timeout: timeoutSecs,
-    memory: 256, // MB — smallest viable for cheerio crawls
+    memory: memoryMbytes,
   });
 
   if (run.status === "FAILED" || run.status === "ABORTED" || run.status === "TIMED-OUT") {

@@ -20,8 +20,18 @@ import type {
 import { PIPELINE_STAGES, STAGE_LABELS } from "../types";
 
 // ─── Store ────────────────────────────────────────────────────────────────────
+//
+// Anchored to globalThis so Next.js dev mode (which can load modules in
+// separate module-instance contexts per route) still shares a single Map
+// across /api/analyze and /api/status/[id].
 
-const jobs = new Map<string, AnalysisJob>();
+declare global {
+  // eslint-disable-next-line no-var
+  var __fitcheckJobs: Map<string, AnalysisJob> | undefined;
+}
+
+const jobs: Map<string, AnalysisJob> =
+  globalThis.__fitcheckJobs ?? (globalThis.__fitcheckJobs = new Map());
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 

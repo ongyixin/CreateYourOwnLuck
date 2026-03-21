@@ -14,6 +14,9 @@ import type { NextRequest } from "next/server";
 import type { StatusEvent } from "../../../../lib/types";
 import { getJob } from "../../../../lib/pipeline/store";
 
+// Force dynamic rendering so Next.js never buffers or caches this SSE route
+export const dynamic = "force-dynamic";
+
 // ─── GET handler ──────────────────────────────────────────────────────────────
 
 export async function GET(

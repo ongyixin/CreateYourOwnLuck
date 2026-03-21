@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * ICP Studio section — Section 5 of the FitCheck report.
  *
@@ -10,15 +12,18 @@
  * - Simulated 5-second reaction (sentiment-colored card)
  * - Messaging gaps / pain-point mismatches
  * - Evidence blocks
+ * - Interactive Q&A chat panel
  *
  * Owned by: report agent
  */
 
-import { Brain, Zap, AlertTriangle } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Brain, Zap, AlertTriangle, MessageCircle, Send, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { EvidenceBlock } from "./evidence-block";
 import type { IcpStudio, Persona } from "@/lib/types";
+import type { ChatMessage } from "@/app/api/persona-chat/route";
 
 // ─── Avatar colors (cycle through for up to 3 personas) ───────────────────
 
@@ -65,6 +70,188 @@ const SENTIMENT: Record<
   },
 };
 
+// ─── Chat panel ────────────────────────────────────────────────────────────
+
+function PersonaChat({
+  persona,
+  avatarColor,
+  onClose,
+}: {
+  persona: Persona;
+  avatarColor: string;
+  onClose: () => void;
+}) {
+  const [history, setHistory] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [history, loading]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text || loading) return;
+
+    const userMsg: ChatMessage = { role: "user", content: text };
+    setHistory((h) => [...h, userMsg]);
+    setInput("");
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/persona-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ persona, message: text, history }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong");
+        return;
+      }
+
+      setHistory((h) => [...h, { role: "assistant", content: data.reply }]);
+    } catch {
+      setError("Network error — please try again");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  return (
+    <div className="border-t border-zinc-800/60 mt-2">
+      {/* Chat header */}
+      <div className="px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div
+            className={cn(
+              "h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0",
+              avatarColor
+            )}
+          >
+            {getInitials(persona.name)}
+          </div>
+          <span className="text-sm text-zinc-300 font-medium">
+            Chat with {persona.name}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-zinc-600 hover:text-zinc-400 transition-colors"
+          aria-label="Close chat"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Message log */}
+      <div className="mx-5 mb-3 rounded-lg bg-zinc-900/60 border border-zinc-800/60 overflow-hidden">
+        <div className="max-h-72 overflow-y-auto p-3 space-y-3">
+          {history.length === 0 && (
+            <p className="text-zinc-600 text-xs text-center py-4">
+              Ask {persona.name} anything — about their workflow, frustrations,
+              or what they look for in a solution.
+            </p>
+          )}
+
+          {history.map((msg, i) => (
+            <div
+              key={i}
+              className={cn(
+                "flex gap-2",
+                msg.role === "user" ? "justify-end" : "justify-start"
+              )}
+            >
+              {msg.role === "assistant" && (
+                <div
+                  className={cn(
+                    "h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5",
+                    avatarColor
+                  )}
+                >
+                  {getInitials(persona.name)}
+                </div>
+              )}
+              <div
+                className={cn(
+                  "max-w-[80%] rounded-lg px-3 py-2 text-sm leading-relaxed",
+                  msg.role === "user"
+                    ? "bg-violet-600/30 border border-violet-500/30 text-violet-100"
+                    : "bg-zinc-800 border border-zinc-700/50 text-zinc-200"
+                )}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex gap-2 justify-start">
+              <div
+                className={cn(
+                  "h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5",
+                  avatarColor
+                )}
+              >
+                {getInitials(persona.name)}
+              </div>
+              <div className="bg-zinc-800 border border-zinc-700/50 rounded-lg px-3 py-2">
+                <Loader2 className="h-4 w-4 text-zinc-500 animate-spin" />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-red-400 text-xs text-center">{error}</p>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-zinc-800/60 p-2 flex gap-2 items-end">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`Ask ${persona.name} something…`}
+            rows={1}
+            className="flex-1 bg-transparent text-sm text-zinc-200 placeholder-zinc-600 resize-none focus:outline-none leading-relaxed py-1 px-1 min-h-[32px] max-h-24"
+            style={{ fieldSizing: "content" } as React.CSSProperties}
+            disabled={loading}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={!input.trim() || loading}
+            className="flex-shrink-0 h-8 w-8 rounded-md bg-violet-600 hover:bg-violet-500 disabled:bg-zinc-700 disabled:text-zinc-600 text-white flex items-center justify-center transition-colors"
+            aria-label="Send"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Persona card ──────────────────────────────────────────────────────────
 
 function PersonaCard({
@@ -77,6 +264,7 @@ function PersonaCard({
   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
   const reaction = persona.fiveSecondReaction;
   const sentiment = SENTIMENT[reaction.sentiment];
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
     <Card className="overflow-hidden">
@@ -91,13 +279,25 @@ function PersonaCard({
         >
           {getInitials(persona.name)}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h3 className="text-white font-semibold">{persona.name}</h3>
           <p className="text-zinc-400 text-sm">{persona.title}</p>
           {persona.age && (
             <span className="text-zinc-600 text-xs">Age {persona.age}</span>
           )}
         </div>
+        <button
+          onClick={() => setChatOpen((v) => !v)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors flex-shrink-0",
+            chatOpen
+              ? "bg-violet-600/20 border-violet-500/50 text-violet-300"
+              : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:border-zinc-600"
+          )}
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          {chatOpen ? "Close chat" : "Chat"}
+        </button>
       </div>
 
       <CardContent className="pt-5 space-y-5">
@@ -228,6 +428,15 @@ function PersonaCard({
         {/* Evidence */}
         <EvidenceBlock evidence={persona.evidence} />
       </CardContent>
+
+      {/* Chat panel — renders outside CardContent to span full width */}
+      {chatOpen && (
+        <PersonaChat
+          persona={persona}
+          avatarColor={avatarColor}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </Card>
   );
 }
@@ -259,7 +468,9 @@ export function IcpStudioSection({ data }: IcpStudioSectionProps) {
             These are AI-generated personas grounded in real web data about your
             market. Use them to simulate how different customer types would react
             to your messaging, and to identify gaps between your current brand
-            and what your customers actually care about.
+            and what your customers actually care about. Click{" "}
+            <span className="text-zinc-300 font-medium">Chat</span> on any
+            persona to ask them questions directly.
           </p>
         </CardContent>
       </Card>

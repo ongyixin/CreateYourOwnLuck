@@ -47,14 +47,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   createJob(jobId, analysisRequest);
 
   // ── Start pipeline (fire-and-forget) ─────────────────────────────────────
-  //
-  // In local dev / standard Node.js: the async pipeline runs until completion.
-  // In Vercel production: wrap with waitUntil() from @vercel/functions so the
-  // serverless function stays alive after returning the response:
-  //
-  //   import { waitUntil } from "@vercel/functions";
+  // On Vercel: import waitUntil from "@vercel/functions" and wrap the call so
+  // the serverless function stays alive after returning the response:
   //   waitUntil(runPipeline(jobId, analysisRequest));
-  //
+  // Locally: plain void is sufficient — Node keeps the process alive.
   void runPipeline(jobId, analysisRequest);
 
   // ── Return job ID immediately ─────────────────────────────────────────────

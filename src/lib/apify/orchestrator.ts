@@ -20,6 +20,7 @@ import type {
   VideoResult,
   ProductHuntEntry,
 } from "../types";
+import { ALL_SCRAPER_SOURCES } from "../types";
 import { runActor } from "./client";
 import {
   ACTORS,
@@ -34,6 +35,7 @@ import {
   buildProductHuntInput,
   buildAutocompleteInput,
   extractHostname,
+  trustpilotUrlFromWebsite,
 } from "./actors";
 import {
   normalizeWebsiteItems,
@@ -79,48 +81,62 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   const warnings: string[] = [];
   const competitorUrls = request.competitorUrls ?? [];
 
+  // Determine which optional sources are enabled (default: all)
+  const selected = new Set(request.selectedSources ?? ALL_SCRAPER_SOURCES);
+
+  /** Resolved empty array used as a no-op placeholder for skipped tasks. */
+  const SKIPPED: Promise<unknown[]> = Promise.resolve([]);
+
   // ── Build all tasks ────────────────────────────────────────────────────────
 
   const companyCrawlTask = runActor(
     ACTORS.WEBSITE_CRAWLER,
-    buildWebsiteCrawlInput(request.websiteUrl, COMPANY_MAX_PAGES)
+    buildWebsiteCrawlInput(request.websiteUrl, COMPANY_MAX_PAGES),
+    120,
+    512
   );
 
   const competitorCrawlTasks = competitorUrls.map((url) =>
-    runActor(ACTORS.WEBSITE_CRAWLER, buildWebsiteCrawlInput(url, COMPETITOR_MAX_PAGES))
+    runActor(ACTORS.WEBSITE_CRAWLER, buildWebsiteCrawlInput(url, COMPETITOR_MAX_PAGES), 120, 256)
   );
 
   const searchQueries = buildSearchQueries(request.companyName, competitorUrls);
-  const searchTask = runActor(ACTORS.GOOGLE_SEARCH, buildSearchInput(searchQueries));
+  const searchTask = selected.has("google_search")
+    ? runActor(ACTORS.GOOGLE_SEARCH, buildSearchInput(searchQueries))
+    : SKIPPED;
 
-  const tweetTask = runActor(
-    ACTORS.TWEET_SCRAPER,
-    buildTweetSearchInput(request.companyName)
-  );
+  const tweetTask = selected.has("twitter")
+    ? runActor(ACTORS.TWEET_SCRAPER, buildTweetSearchInput(request.companyName))
+    : SKIPPED;
 
-  const g2Task = runActor(ACTORS.G2_SCRAPER, buildG2Input(request.companyName));
+  const g2Task = selected.has("reviews")
+    ? runActor(ACTORS.G2_SCRAPER, buildG2Input(request.companyName))
+    : SKIPPED;
 
-  const trustpilotTask = runActor(
-    ACTORS.TRUSTPILOT_SCRAPER,
-    buildTrustpilotInput(request.companyName)
-  );
+  const trustpilotUrl = trustpilotUrlFromWebsite(request.websiteUrl);
+  const trustpilotTask =
+    selected.has("reviews") && trustpilotUrl
+      ? runActor(ACTORS.TRUSTPILOT_SCRAPER, buildTrustpilotInput(trustpilotUrl))
+      : SKIPPED;
+  if (selected.has("reviews") && !trustpilotUrl) {
+    warnings.push(`Trustpilot scrape skipped: could not derive URL from ${request.websiteUrl}`);
+  }
 
-  const jobTask = runActor(ACTORS.JOB_SCRAPER, buildJobSearchInput(request.companyName));
+  const jobTask = selected.has("enrichment")
+    ? runActor(ACTORS.JOB_SCRAPER, buildJobSearchInput(request.companyName))
+    : SKIPPED;
 
-  const youtubeTask = runActor(
-    ACTORS.YOUTUBE_SCRAPER,
-    buildYouTubeSearchInput(request.companyName)
-  );
+  const youtubeTask = selected.has("enrichment")
+    ? runActor(ACTORS.YOUTUBE_SCRAPER, buildYouTubeSearchInput(request.companyName))
+    : SKIPPED;
 
-  const productHuntTask = runActor(
-    ACTORS.PRODUCT_HUNT_SCRAPER,
-    buildProductHuntInput(request.companyName)
-  );
+  const productHuntTask = selected.has("enrichment")
+    ? runActor(ACTORS.PRODUCT_HUNT_SCRAPER, buildProductHuntInput(request.companyName))
+    : SKIPPED;
 
-  const autocompleteTask = runActor(
-    ACTORS.AUTOCOMPLETE_SCRAPER,
-    buildAutocompleteInput(request.companyName)
-  );
+  const autocompleteTask = selected.has("enrichment")
+    ? runActor(ACTORS.AUTOCOMPLETE_SCRAPER, buildAutocompleteInput(request.companyName))
+    : SKIPPED;
 
   // ── Run everything in parallel ─────────────────────────────────────────────
 
@@ -201,7 +217,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
       ? normalizeMentions(searchResult.value)
       : [];
 
-  if (searchResult?.status === "rejected") {
+  if (!selected.has("google_search")) {
+    // intentionally skipped — no warning
+  } else if (searchResult?.status === "rejected") {
     warnings.push(`Google search scrape failed: ${stringifyError(searchResult.reason)}`);
   } else if (mentions.length === 0) {
     warnings.push("Google search returned 0 mentions");
@@ -210,7 +228,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   // ── Social mentions (Twitter/X) ────────────────────────────────────────────
 
   let socialMentions: SocialMention[] | undefined;
-  if (tweetResult?.status === "fulfilled") {
+  if (!selected.has("twitter")) {
+    // intentionally skipped
+  } else if (tweetResult?.status === "fulfilled") {
     const normalized = normalizeTweets(tweetResult.value);
     socialMentions = normalized.length > 0 ? normalized : undefined;
     if (normalized.length === 0) {
@@ -224,7 +244,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
 
   let reviews: StructuredReview[] | undefined;
 
-  if (g2Result?.status === "fulfilled") {
+  if (!selected.has("reviews")) {
+    // intentionally skipped
+  } else if (g2Result?.status === "fulfilled") {
     const g2 = normalizeG2Reviews(g2Result.value);
     reviews = g2.length > 0 ? g2 : undefined;
     if (g2.length === 0) {
@@ -236,7 +258,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
 
   // ── Trustpilot reviews ─────────────────────────────────────────────────────
 
-  if (trustpilotResult?.status === "fulfilled") {
+  if (!selected.has("reviews")) {
+    // intentionally skipped
+  } else if (trustpilotResult?.status === "fulfilled") {
     const tp = normalizeTrustpilotReviews(trustpilotResult.value);
     if (tp.length > 0) {
       reviews = reviews ? [...reviews, ...tp] : tp;
@@ -255,7 +279,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   // ── Job postings ───────────────────────────────────────────────────────────
 
   let jobPostings: JobPosting[] | undefined;
-  if (jobResult?.status === "fulfilled") {
+  if (!selected.has("enrichment")) {
+    // intentionally skipped
+  } else if (jobResult?.status === "fulfilled") {
     const jobs = normalizeJobPostings(jobResult.value);
     jobPostings = jobs.length > 0 ? jobs : undefined;
     if (jobs.length === 0) {
@@ -268,7 +294,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   // ── YouTube videos ─────────────────────────────────────────────────────────
 
   let videos: VideoResult[] | undefined;
-  if (youtubeResult?.status === "fulfilled") {
+  if (!selected.has("enrichment")) {
+    // intentionally skipped
+  } else if (youtubeResult?.status === "fulfilled") {
     const vids = normalizeVideoResults(youtubeResult.value);
     videos = vids.length > 0 ? vids : undefined;
     if (vids.length === 0) {
@@ -281,7 +309,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   // ── Product Hunt ───────────────────────────────────────────────────────────
 
   let productHuntEntries: ProductHuntEntry[] | undefined;
-  if (productHuntResult?.status === "fulfilled") {
+  if (!selected.has("enrichment")) {
+    // intentionally skipped
+  } else if (productHuntResult?.status === "fulfilled") {
     const ph = normalizeProductHuntEntries(productHuntResult.value);
     productHuntEntries = ph.length > 0 ? ph : undefined;
     if (ph.length === 0) {
@@ -294,7 +324,9 @@ export async function scrapeAll(request: AnalysisRequest): Promise<ScrapedData> 
   // ── Autocomplete ───────────────────────────────────────────────────────────
 
   let autocompleteSuggestions: string[] | undefined;
-  if (autocompleteResult?.status === "fulfilled") {
+  if (!selected.has("enrichment")) {
+    // intentionally skipped
+  } else if (autocompleteResult?.status === "fulfilled") {
     const ac = normalizeAutocompleteSuggestions(autocompleteResult.value);
     autocompleteSuggestions = ac.length > 0 ? ac : undefined;
     if (ac.length === 0) {

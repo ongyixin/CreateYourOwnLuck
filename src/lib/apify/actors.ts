@@ -10,12 +10,12 @@ export const ACTORS = {
   WEBSITE_CRAWLER: "apify/website-content-crawler",
   GOOGLE_SEARCH: "apify/google-search-scraper",
   TWEET_SCRAPER: "apidojo/tweet-scraper",
-  G2_SCRAPER: "misceres/g2-scraper",
-  TRUSTPILOT_SCRAPER: "epctex/trustpilot-scraper",
-  JOB_SCRAPER: "helloitsjoe/linkedin-jobs-scraper",
+  G2_SCRAPER: "apify/g2-scraper",
+  TRUSTPILOT_SCRAPER: "automation-lab/trustpilot-scraper",
+  JOB_SCRAPER: "bebity/linkedin-jobs-scraper",
   YOUTUBE_SCRAPER: "streamers/youtube-scraper",
-  PRODUCT_HUNT_SCRAPER: "epctex/product-hunt-scraper",
-  AUTOCOMPLETE_SCRAPER: "emastra/google-autocomplete-scraper",
+  PRODUCT_HUNT_SCRAPER: "michael.g/product-hunt-scraper",
+  AUTOCOMPLETE_SCRAPER: "damilo/google-autocomplete-apify",
 } as const;
 
 // ─── Input builders ───────────────────────────────────────────────────────────
@@ -78,8 +78,6 @@ export function buildTweetSearchInput(
     searchTerms: [companyName],
     maxTweets,
     queryType: "Latest",
-    // Exclude retweets to get original mentions only
-    filter: "no_retweets",
   };
 }
 
@@ -96,17 +94,28 @@ export function buildG2Input(companyName: string): Record<string, unknown> {
 }
 
 /**
- * Input for epctex/trustpilot-scraper.
- * Searches Trustpilot for the company and scrapes structured reviews.
+ * Input for automation-lab/trustpilot-scraper.
+ * Requires a direct Trustpilot business URL (reviews mode).
+ * Derive the URL from the company's website hostname:
+ *   e.g. https://padlet.com → https://www.trustpilot.com/review/padlet.com
  */
 export function buildTrustpilotInput(
-  companyName: string
+  trustpilotUrl: string
 ): Record<string, unknown> {
   return {
-    search: companyName,
+    businessUrls: [{ url: trustpilotUrl }],
     maxReviews: 15,
-    startUrls: [],
   };
+}
+
+/**
+ * Derive the Trustpilot review page URL from a company website URL.
+ * Returns null if the hostname cannot be extracted.
+ */
+export function trustpilotUrlFromWebsite(websiteUrl: string): string | null {
+  const hostname = extractHostname(websiteUrl);
+  if (!hostname) return null;
+  return `https://www.trustpilot.com/review/${hostname}`;
 }
 
 /**

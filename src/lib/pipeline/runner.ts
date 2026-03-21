@@ -22,6 +22,7 @@ import type {
   FitCheckReport,
   ScrapedData,
 } from "../types";
+import { ALL_SCRAPER_SOURCES } from "../types";
 import { scrapeAll } from "../apify/orchestrator";
 import {
   generateBrandPerception,
@@ -61,6 +62,7 @@ export async function runPipeline(
   jobId: string,
   request: AnalysisRequest
 ): Promise<void> {
+  console.log(`[Pipeline ${jobId}] Starting for "${request.companyName}" (${request.websiteUrl})`);
   setJobRunning(jobId);
 
   let scrapedData: ScrapedData;
@@ -68,22 +70,27 @@ export async function runPipeline(
 
   // ── Stage 1–3: Scraping ──────────────────────────────────────────────────
 
-  const hasCompetitors =
-    (request.competitorUrls ?? []).length > 0;
+  const hasCompetitors = (request.competitorUrls ?? []).length > 0;
+  const selected = new Set(request.selectedSources ?? ALL_SCRAPER_SOURCES);
 
   updateStage(jobId, "crawl_company", "running");
   if (hasCompetitors) updateStage(jobId, "crawl_competitors", "running");
-  updateStage(jobId, "search_mentions", "running");
-  updateStage(jobId, "scrape_reviews", "running");
-  updateStage(jobId, "scrape_social", "running");
-  updateStage(jobId, "scrape_enrichment", "running");
+  if (selected.has("google_search")) updateStage(jobId, "search_mentions", "running");
+  if (selected.has("reviews")) updateStage(jobId, "scrape_reviews", "running");
+  if (selected.has("twitter")) updateStage(jobId, "scrape_social", "running");
+  if (selected.has("enrichment")) updateStage(jobId, "scrape_enrichment", "running");
 
   try {
     scrapedData = await scrapeAll(request);
     pipelineWarnings.push(...scrapedData.warnings);
+    if (scrapedData.warnings.length > 0) {
+      console.warn(`[Pipeline ${jobId}] Scrape warnings:`, scrapedData.warnings);
+    }
+    console.log(`[Pipeline ${jobId}] Scraping complete — ${scrapedData.companyPages.length} company pages, ${scrapedData.mentions.length} mentions`);
   } catch (err) {
     // Catastrophic scrape failure — mark all scrape stages failed and bail
     const msg = errorMessage(err);
+    console.error(`[Pipeline ${jobId}] Scraping failed:`, err);
     updateStage(jobId, "crawl_company", "failed", msg);
     if (hasCompetitors) updateStage(jobId, "crawl_competitors", "failed", msg);
     updateStage(jobId, "search_mentions", "failed", msg);
@@ -193,6 +200,7 @@ export async function runPipeline(
 
   updateStage(jobId, "build_report", "complete");
   setJobComplete(jobId, report);
+  console.log(`[Pipeline ${jobId}] Complete — report assembled`);
 }
 
 // ─── Stage resolution helpers ─────────────────────────────────────────────────
@@ -207,6 +215,7 @@ function resolveScrapeStages(
   data: ScrapedData
 ): void {
   const warnings = data.warnings;
+  const selected = new Set(request.selectedSources ?? ALL_SCRAPER_SOURCES);
 
   // Company crawl
   if (data.companyPages.length > 0) {
@@ -228,7 +237,9 @@ function resolveScrapeStages(
   }
 
   // Search / mentions
-  if (data.mentions.length > 0) {
+  if (!selected.has("google_search")) {
+    updateStage(jobId, "search_mentions", "skipped", "Not selected");
+  } else if (data.mentions.length > 0) {
     updateStage(jobId, "search_mentions", "complete");
   } else {
     const msg = warnings.find((w) => w.toLowerCase().includes("search") || w.toLowerCase().includes("mention")) ?? "No mentions returned";
@@ -236,45 +247,41 @@ function resolveScrapeStages(
   }
 
   // Structured reviews (G2 + Trustpilot)
-  // undefined = actor was not run (not wired into orchestrator yet); skip rather than fail
-  if (data.reviews === undefined) {
-    updateStage(jobId, "scrape_reviews", "skipped", "Not included in this build");
-  } else if (data.reviews.length > 0) {
-    updateStage(jobId, "scrape_reviews", "complete");
-  } else {
+  if (!selected.has("reviews")) {
+    updateStage(jobId, "scrape_reviews", "skipped", "Not selected");
+  } else if (data.reviews === undefined || data.reviews.length === 0) {
     const msg = warnings.find((w) => /g2|trustpilot|review/i.test(w)) ?? "No structured reviews returned";
     updateStage(jobId, "scrape_reviews", "failed", msg);
+  } else {
+    updateStage(jobId, "scrape_reviews", "complete");
   }
 
   // Social mentions (Twitter/X)
-  if (data.socialMentions === undefined) {
-    updateStage(jobId, "scrape_social", "skipped", "Not included in this build");
-  } else if (data.socialMentions.length > 0) {
-    updateStage(jobId, "scrape_social", "complete");
-  } else {
+  if (!selected.has("twitter")) {
+    updateStage(jobId, "scrape_social", "skipped", "Not selected");
+  } else if (data.socialMentions === undefined || data.socialMentions.length === 0) {
     const msg = warnings.find((w) => /twitter|tweet|social/i.test(w)) ?? "No social mentions returned";
     updateStage(jobId, "scrape_social", "failed", msg);
+  } else {
+    updateStage(jobId, "scrape_social", "complete");
   }
 
   // Enrichment data (jobs, YouTube, Product Hunt, autocomplete)
-  const hasEnrichment =
-    (data.jobPostings && data.jobPostings.length > 0) ||
-    (data.videos && data.videos.length > 0) ||
-    (data.productHuntEntries && data.productHuntEntries.length > 0) ||
-    (data.autocompleteSuggestions && data.autocompleteSuggestions.length > 0);
-  const enrichmentAttempted =
-    data.jobPostings !== undefined ||
-    data.videos !== undefined ||
-    data.productHuntEntries !== undefined ||
-    data.autocompleteSuggestions !== undefined;
-
-  if (!enrichmentAttempted) {
-    updateStage(jobId, "scrape_enrichment", "skipped", "Not included in this build");
-  } else if (hasEnrichment) {
-    updateStage(jobId, "scrape_enrichment", "complete");
+  if (!selected.has("enrichment")) {
+    updateStage(jobId, "scrape_enrichment", "skipped", "Not selected");
   } else {
-    const msg = warnings.find((w) => /job|youtube|product hunt|autocomplete/i.test(w)) ?? "No enrichment data returned";
-    updateStage(jobId, "scrape_enrichment", "failed", msg);
+    const hasEnrichment =
+      (data.jobPostings && data.jobPostings.length > 0) ||
+      (data.videos && data.videos.length > 0) ||
+      (data.productHuntEntries && data.productHuntEntries.length > 0) ||
+      (data.autocompleteSuggestions && data.autocompleteSuggestions.length > 0);
+
+    if (hasEnrichment) {
+      updateStage(jobId, "scrape_enrichment", "complete");
+    } else {
+      const msg = warnings.find((w) => /job|youtube|product hunt|autocomplete/i.test(w)) ?? "No enrichment data returned";
+      updateStage(jobId, "scrape_enrichment", "failed", msg);
+    }
   }
 }
 
@@ -294,6 +301,7 @@ function unwrapOrFallback<T>(
   if (result.status === "fulfilled") return result.value;
 
   const msg = errorMessage(result.reason);
+  console.error(`[Pipeline ${jobId}] AI stage "${stage}" failed:`, result.reason);
   updateStage(jobId, stage, "failed", msg);
   warnings.push(`${stage} failed: ${msg}`);
   return fallback;
