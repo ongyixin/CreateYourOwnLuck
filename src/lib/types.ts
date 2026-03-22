@@ -455,6 +455,9 @@ export type ReportResponse = FitCheckReport | PendingReportResponse;
  */
 export type FocusGroupPhase = "probe" | "flip";
 
+/** Which focus group interaction mode the user is currently in. */
+export type FocusGroupMode = "chat" | "panel";
+
 export interface FocusGroupMessage {
   id: string;
   /** 'user' = the founder/moderator; 'persona' = an AI agent; 'system' = phase announcements */
@@ -463,6 +466,50 @@ export interface FocusGroupMessage {
   personaName?: string;
   content: string;
   timestamp: string;
+  /** URL or base64 data URI of media that was shared in this message (panel mode). */
+  mediaDataUrl?: string;
+  mediaType?: "image" | "pdf" | "video";
+}
+
+/**
+ * A piece of visual/audio material the user uploads in Panel mode.
+ * Images are stored as base64 data URIs; PDFs are represented by
+ * their extracted text plus an optional thumbnail.
+ */
+export interface MediaAttachment {
+  type: "image" | "pdf" | "video";
+  /** Display name (original filename). */
+  name: string;
+  /** Base64 data URI for images/video-frames; null for PDFs. */
+  dataUrl: string | null;
+  /** Extracted text content for PDFs; null for images. */
+  extractedText: string | null;
+  /** MIME type of the original file, e.g. "image/png", "application/pdf". */
+  mimeType: string;
+}
+
+/**
+ * A single persona's reaction in Panel mode (parallel, not sequential).
+ * Includes an optional sentiment for coloured card borders.
+ */
+export interface PanelReaction {
+  personaId: string;
+  personaName: string;
+  content: string;
+  /** Derived by the AI from the reaction text. */
+  sentiment: "positive" | "neutral" | "skeptical" | "negative";
+  timestamp: string;
+}
+
+/** Shape of a POST body to /api/focus-group/panel */
+export interface PanelRoundRequest {
+  sessionId?: string;
+  jobId: string;
+  personas: Persona[];
+  /** Free-text context from the founder (typed or transcribed). */
+  stimulus?: string;
+  /** The media the personas are reacting to. */
+  media?: MediaAttachment;
 }
 
 export interface FocusGroupSession {

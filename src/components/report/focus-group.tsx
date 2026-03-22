@@ -10,16 +10,19 @@ import {
   BarChart3,
   AlertTriangle,
   ArrowRightLeft,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
 import type {
   FocusGroupAnalytics,
   FocusGroupMessage,
+  FocusGroupMode,
   FocusGroupPhase,
   Persona,
 } from "@/lib/types";
 import { FocusGroupAnalyticsDashboard } from "./focus-group-analytics";
+import { FocusGroupPanel } from "./focus-group-panel";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -276,6 +279,7 @@ interface FocusGroupSectionProps {
 }
 
 export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
+  const [mode, setMode] = useState<FocusGroupMode>("chat");
   const [messages, setMessages] = useState<FocusGroupMessage[]>([]);
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<FocusGroupPhase>("probe");
@@ -467,12 +471,50 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="module-header text-neon-amber">Focus Group Mode</div>
-        <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">
-          FOCUS GROUP
-        </h2>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="module-header text-neon-amber">Focus Group Mode</div>
+          <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">
+            FOCUS GROUP
+          </h2>
+        </div>
+
+        {/* Mode toggle */}
+        <div className="flex items-center gap-1 border border-border rounded-sm p-1 self-start">
+          <button
+            onClick={() => setMode("chat")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-sm font-mono text-[10px] font-bold tracking-wider transition-all",
+              mode === "chat"
+                ? "bg-neon-amber/15 text-neon-amber border border-neon-amber/40"
+                : "text-muted-foreground hover:text-foreground border border-transparent"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            CHAT
+          </button>
+          <button
+            onClick={() => setMode("panel")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-sm font-mono text-[10px] font-bold tracking-wider transition-all",
+              mode === "panel"
+                ? "bg-neon-purple/15 text-neon-purple border border-neon-purple/40"
+                : "text-muted-foreground hover:text-foreground border border-transparent"
+            )}
+          >
+            <LayoutGrid className="h-3 w-3" />
+            PANEL
+          </button>
+        </div>
       </div>
+
+      {/* Panel mode */}
+      {mode === "panel" && (
+        <FocusGroupPanel personas={localPersonas} jobId={jobId} sessionId={sessionId} />
+      )}
+
+      {/* Chat mode */}
+      {mode === "chat" && (<>
 
       {/* Explainer */}
       <div className="terminal-card border-border">
@@ -646,6 +688,8 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
       {analytics && (
         <FocusGroupAnalyticsDashboard analytics={analytics} personas={localPersonas} />
       )}
+
+      </>)}
     </div>
   );
 }
