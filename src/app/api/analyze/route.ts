@@ -8,14 +8,51 @@
  */
 
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/options";
+import { prisma } from "@/lib/prisma";
 import type { AnalysisRequest, AnalyzeResponse } from "../../../lib/types";
 import { createJob } from "../../../lib/pipeline/store";
 import { runPipeline } from "../../../lib/pipeline/runner";
+import { TIER_LIMITS, type UserTier } from "@/lib/tier";
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request: Request): Promise<NextResponse> {
   // ── Parse body ────────────────────────────────────────────────────────────
+
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
+  // ── Fetch user tier and enforce analysis limit ────────────────────────────
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { tier: true, role: true },
+  });
+
+  const tier = (user?.tier ?? "FREE") as UserTier;
+  const isAdmin = user?.role === "ADMIN";
+  const analysisLimit = TIER_LIMITS[tier].analyses;
+
+  if (!isAdmin && analysisLimit !== Infinity) {
+    const analysisCount = await prisma.analysis.count({
+      where: { userId: session.user.id },
+    });
+    if (analysisCount >= analysisLimit) {
+      return NextResponse.json(
+        {
+          error: "Analysis limit reached for your plan",
+          limit: analysisLimit,
+          current: analysisCount,
+          tier,
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   let body: unknown;
   try {
@@ -36,15 +73,30 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const analysisRequest = body as AnalysisRequest;
 
-  // Clamp competitor list to 3 entries max
+  // Clamp competitor list by tier
+  const competitorLimit = TIER_LIMITS[tier].competitors;
   if (analysisRequest.competitorUrls) {
-    analysisRequest.competitorUrls = analysisRequest.competitorUrls.slice(0, 3);
+    analysisRequest.competitorUrls = analysisRequest.competitorUrls.slice(0, competitorLimit);
   }
+
+  // Attach tier to request so the pipeline knows the persona count
+  analysisRequest.userTier = tier;
 
   // ── Create job ────────────────────────────────────────────────────────────
 
   const jobId = crypto.randomUUID();
   createJob(jobId, analysisRequest);
+
+  // ── Link job to authenticated user ────────────────────────────────────────
+  await prisma.analysis.create({
+    data: {
+      jobId,
+      userId: session.user.id,
+      company: analysisRequest.companyName,
+      url: analysisRequest.websiteUrl,
+      status: "pending",
+    },
+  });
 
   // ── Start pipeline (fire-and-forget) ─────────────────────────────────────
   // On Vercel: import waitUntil from "@vercel/functions" and wrap the call so

@@ -23,6 +23,7 @@ import type {
   ScrapedData,
 } from "../types";
 import { ALL_SCRAPER_SOURCES } from "../types";
+import { prisma } from "../prisma";
 import { scrapeAll } from "../apify/orchestrator";
 import {
   generateBrandPerception,
@@ -201,6 +202,13 @@ export async function runPipeline(
   updateStage(jobId, "build_report", "complete");
   setJobComplete(jobId, report);
   console.log(`[Pipeline ${jobId}] Complete — report assembled`);
+
+  // Persist report to DB so it survives server restarts (for report history)
+  void prisma.analysis.update({
+    where: { jobId },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: { status: "complete", reportJson: report as any },
+  }).catch((err) => console.error(`[Pipeline ${jobId}] Failed to persist report:`, err));
 }
 
 // ─── Stage resolution helpers ─────────────────────────────────────────────────

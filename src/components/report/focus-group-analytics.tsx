@@ -1,5 +1,7 @@
 "use client";
 
+import { PaywallGate } from "@/components/paywall-gate";
+
 import {
   BarChart,
   Bar,
@@ -421,9 +423,15 @@ export function FocusGroupAnalyticsDashboard({
         />
       </div>
 
-      {/* Adjacent segment */}
+      {/* Adjacent segment — AGENCY only */}
       {analytics.adjacentSegmentSignal && (
-        <AdjacentSegmentSignal signal={analytics.adjacentSegmentSignal} />
+        <PaywallGate
+          requiredTier="AGENCY"
+          featureName="ADJACENT SEGMENT EXPANSION"
+          featureDesc="Discover untapped adjacent markets identified during the focus group session."
+        >
+          <AdjacentSegmentSignal signal={analytics.adjacentSegmentSignal} />
+        </PaywallGate>
       )}
 
       {/* Recommended actions */}

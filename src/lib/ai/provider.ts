@@ -21,6 +21,7 @@ import type {
   LeadSuggestions,
   IcpStudio,
 } from '../types';
+import { TIER_LIMITS } from '../tier';
 import {
   BrandPerceptionSchema,
   IcpAssessmentSchema,
@@ -130,8 +131,13 @@ export async function generateLeadSuggestions(
 
 export async function generateIcpStudio(ctx: AnalysisContext): Promise<IcpStudio> {
   const context = formatContext(ctx.request, ctx.scrapedData);
-  const prompt = buildIcpStudioPrompt(ctx.request, context);
-  return runGenerate(IcpStudioSchema, prompt) as Promise<IcpStudio>;
+  const tier = ctx.request.userTier ?? "FREE";
+  const personaCount = TIER_LIMITS[tier].personas;
+  const prompt = buildIcpStudioPrompt(ctx.request, context, personaCount);
+  const result = await runGenerate(IcpStudioSchema, prompt) as IcpStudio;
+  // Cap to tier limit in case the AI returns more personas than requested
+  result.personas = result.personas.slice(0, personaCount);
+  return result;
 }
 
 // ============================================================

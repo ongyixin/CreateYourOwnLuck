@@ -6,11 +6,11 @@ export default function ScanlineOverlay() {
       <div className="absolute inset-0" style={{
         background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px)',
       }} />
-      <div className="absolute inset-0 opacity-[0.12]" style={{
+      <div className="absolute inset-0 opacity-[0.05]" style={{
         backgroundImage: `radial-gradient(circle, currentColor 0.8px, transparent 0.8px)`,
         backgroundSize: '5px 5px',
       }} />
-      <div className="absolute inset-0 opacity-[0.06]" style={{
+      <div className="absolute inset-0 opacity-[0.025]" style={{
         backgroundImage: `radial-gradient(circle, currentColor 0.5px, transparent 0.5px)`,
         backgroundSize: '5px 5px',
         backgroundPosition: '2.5px 2.5px',

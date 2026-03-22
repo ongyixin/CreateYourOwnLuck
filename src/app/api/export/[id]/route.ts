@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import React from "react";
 import { getJob } from "@/lib/pipeline/store";
 import { ReportPDF } from "@/lib/pdf/report-pdf";
+import { requireTier } from "@/lib/auth/require-tier";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,6 +12,9 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const tierCheck = await requireTier("PRO");
+  if (!tierCheck.ok) return tierCheck.response;
+
   const job = getJob(params.id);
 
   if (!job) {

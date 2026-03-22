@@ -27,6 +27,7 @@ import { ActionablesSection } from "@/components/report/actionables";
 import { LeadSuggestionsSection } from "@/components/report/lead-suggestions";
 import { IcpStudioSection } from "@/components/report/icp-studio";
 import { FocusGroupSection } from "@/components/report/focus-group";
+import { PaywallGate } from "@/components/paywall-gate";
 
 type Tab = "brand" | "icp" | "actions" | "leads" | "studio" | "focus";
 
@@ -206,7 +207,7 @@ export default function ReportPage() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { setActiveTab(tab.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                   className={cn(
                     "flex items-center gap-2 px-4 py-3 font-mono text-xs font-bold whitespace-nowrap border-b-2 transition-all duration-150 tracking-wider",
                     isActive
@@ -225,27 +226,6 @@ export default function ReportPage() {
 
       {/* Section content */}
       <main className="relative z-20 max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        {/* Pipeline warnings */}
-        {report.warnings.length > 0 && (
-          <div className="mb-6 terminal-card border-neon-amber">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-4 w-4 text-neon-amber mt-0.5 shrink-0" />
-              <div>
-                <p className="text-neon-amber font-mono text-xs font-bold tracking-wider mb-1">
-                  PARTIAL DATA — SOME WEB SCRAPES FAILED
-                </p>
-                <ul className="space-y-0.5">
-                  {report.warnings.map((w, i) => (
-                    <li key={i} className="text-muted-foreground text-xs font-mono">
-                      › {w}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="animate-fade-in">
           {activeTab === "brand" && (
             <BrandPerceptionSection data={report.brandPerception} />
@@ -260,13 +240,25 @@ export default function ReportPage() {
             <LeadSuggestionsSection data={report.leadSuggestions} />
           )}
           {activeTab === "studio" && (
-            <IcpStudioSection data={report.icpStudio} />
+            <PaywallGate
+              featureName="ICP STUDIO"
+              featureDesc="Chat individually with each AI persona to probe their objections, motivations, and buying triggers in depth."
+              requiredTier="PRO"
+            >
+              <IcpStudioSection data={report.icpStudio} />
+            </PaywallGate>
           )}
           {activeTab === "focus" && (
-            <FocusGroupSection
-              personas={report.icpStudio.personas}
-              jobId={report.jobId}
-            />
+            <PaywallGate
+              featureName="FOCUS GROUP MODE"
+              featureDesc="Run a live 4–6 agent focus group session. Personas debate your product, surface friction, and vote on fit."
+              requiredTier="PRO"
+            >
+              <FocusGroupSection
+                personas={report.icpStudio.personas}
+                jobId={report.jobId}
+              />
+            </PaywallGate>
           )}
         </div>
       </main>
