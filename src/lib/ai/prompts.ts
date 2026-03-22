@@ -248,8 +248,8 @@ export const IcpStudioSchema = z.object({
   personas: z
     .array(PersonaSchema)
     .min(2)
-    .max(3)
-    .describe('2–3 distinct personas — differentiated by role, context, and relationship to the product'),
+    .max(10)
+    .describe('Distinct personas — differentiated by role, context, and relationship to the product'),
 });
 
 // ============================================================
@@ -502,8 +502,8 @@ If public mentions reference Reddit threads, Hacker News posts, or review sites,
 ${context}`;
 }
 
-export function buildIcpStudioPrompt(request: AnalysisRequest, context: string): string {
-  return `Create 2–3 fictional but evidence-grounded customer personas for **${request.companyName}** (${request.websiteUrl}).${request.goal ? `\n\nTeam's stated goal: "${request.goal}"` : ''}
+export function buildIcpStudioPrompt(request: AnalysisRequest, context: string, personaCount = 3): string {
+  return `Create exactly ${personaCount} fictional but evidence-grounded customer personas for **${request.companyName}** (${request.websiteUrl}).${request.goal ? `\n\nTeam's stated goal: "${request.goal}"` : ''}
 
 Each persona must:
 - Be grounded in actual signals from the scraped data, not stock archetypes

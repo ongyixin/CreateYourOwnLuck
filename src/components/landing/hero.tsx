@@ -4,14 +4,16 @@ import { useRef } from "react";
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
 import {
-  Search, Cpu, Users, Sparkles, Globe, ArrowRight,
+  Search, Users, Sparkles, Globe, ArrowRight,
   ChevronDown, Eye, BarChart3, Lightbulb, Target,
-  AlertTriangle, Zap, TrendingUp, MessageSquare,
+  LogOut, Shield,
 } from "lucide-react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import AnimatedLogo from "@/components/animated-logo";
 import ScanlineOverlay from "@/components/scanline-overlay";
 import CursorBloom from "@/components/cursor-bloom";
 import { ThemeToggle } from "@/components/theme-toggle";
+import PricingSection from "@/components/landing/pricing";
 
 const Section = ({ children, className = "", direction = "up" }: {
   children: React.ReactNode; className?: string; direction?: "up" | "left" | "right" | "scale";
@@ -84,6 +86,76 @@ const STEPS = [
   { step: "03", title: "Get your report", desc: "Interactive report with brand analysis, ICPs, and actions." },
 ];
 
+const TIER_BADGE: Record<string, { label: string; color: string }> = {
+  PRO: { label: "PRO", color: "text-neon-green border-neon-green" },
+  AGENCY: { label: "AGENCY", color: "text-neon-pink border-neon-pink" },
+};
+
+function NavBar() {
+  const { data: session, status } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const tierInfo = TIER_BADGE[session?.user?.tier ?? ""];
+
+  return (
+    <nav className="sticky top-0 z-40 flex items-center justify-between px-6 py-3 border-b border-border bg-background/90 backdrop-blur-md">
+      <div className="flex items-center gap-2">
+        <AnimatedLogo size={22} />
+        <span className="font-mono text-neon-green font-bold text-lg tracking-wider">
+          FITCHECK<span className="blink">_</span>
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="hidden sm:flex items-center gap-4 font-mono text-[10px] tracking-widest text-muted-foreground">
+          <span className="text-neon-pink">●</span> LIVE
+          <span>|</span>
+          <a href="#pricing" className="hover:text-neon-amber transition-colors">PRICING</a>
+          <span>|</span>
+          <span>v1.0.0</span>
+        </div>
+        <ThemeToggle />
+
+        {status === "authenticated" && session?.user ? (
+          <div className="flex items-center gap-2">
+            {tierInfo && (
+              <span className={`font-mono text-[9px] tracking-widest border px-1.5 py-0.5 ${tierInfo.color}`}>
+                {tierInfo.label}
+              </span>
+            )}
+            {isAdmin && (
+              <Link href="/admin" className="flex items-center gap-1 font-mono text-[10px] text-neon-amber hover:text-neon-green transition-colors tracking-wider">
+                <Shield className="w-3 h-3" />
+                ADMIN
+              </Link>
+            )}
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="flex items-center gap-1 border-2 border-border text-muted-foreground font-mono font-bold px-3 py-2 rounded-sm text-xs tracking-wider hover:border-neon-pink hover:text-neon-pink transition-all"
+            >
+              <LogOut className="w-3 h-3" />
+              SIGN OUT
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => signIn()}
+              className="border-2 border-border text-muted-foreground font-mono font-bold px-3 py-2 rounded-sm text-xs tracking-wider hover:border-neon-green hover:text-neon-green transition-all"
+            >
+              SIGN IN
+            </button>
+            <Link
+              href="/analyze"
+              className="bg-neon-green text-primary-foreground font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider hover:glow-green transition-all active:scale-95"
+            >
+              [ RUN FITCHECK ]
+            </Link>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
 export default function Hero() {
   return (
     <div className="min-h-screen relative">
@@ -91,28 +163,7 @@ export default function Hero() {
       <CursorBloom />
 
       {/* Sticky Nav */}
-      <nav className="sticky top-0 z-40 flex items-center justify-between px-6 py-3 border-b border-border bg-background/90 backdrop-blur-md">
-        <div className="flex items-center gap-2">
-          <AnimatedLogo size={22} />
-          <span className="font-mono text-neon-green font-bold text-lg tracking-wider">
-            FITCHECK<span className="blink">_</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-4 font-mono text-[10px] tracking-widest text-muted-foreground">
-            <span className="text-neon-pink">●</span> LIVE
-            <span>|</span>
-            <span>v1.0.0</span>
-          </div>
-          <ThemeToggle />
-          <Link
-            href="/analyze"
-            className="bg-neon-green text-primary-foreground font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider hover:glow-green transition-all active:scale-95"
-          >
-            [ RUN FITCHECK ]
-          </Link>
-        </div>
-      </nav>
+      <NavBar />
 
       {/* Hero */}
       <header className="relative z-20 flex flex-col items-center justify-center px-6 pt-20 pb-16 md:pt-28 text-center">
@@ -319,6 +370,13 @@ export default function Hero() {
               )
             )}
           </div>
+        </Section>
+
+        <div className="section-divider" />
+
+        {/* Pricing */}
+        <Section direction="up">
+          <PricingSection />
         </Section>
 
         <div className="section-divider" />

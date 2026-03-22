@@ -18,6 +18,9 @@
 
 import type { FitCheckReport, PendingReportResponse } from "../../../../lib/types";
 import { getJob } from "../../../../lib/pipeline/store";
+import { prisma } from "../../../../lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/options";
 
 // ─── Demo / mock report (report agent) ───────────────────────────────────────
 
@@ -371,42 +374,69 @@ export async function GET(
     return Response.json({ ...DEMO_REPORT, generatedAt: new Date().toISOString() });
   }
 
-  const job = getJob(id);
+  // ── Require authentication ────────────────────────────────────────────────
 
-  // ── Not found ─────────────────────────────────────────────────────────────
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!job) {
+  // ── Verify ownership via DB ───────────────────────────────────────────────
+  // The Analysis record is created before the pipeline starts, so it always
+  // exists for valid jobs regardless of whether the job is still in memory.
+
+  const record = await prisma.analysis.findUnique({
+    where: { jobId: id },
+    select: { userId: true, status: true, reportJson: true },
+  });
+
+  if (!record) {
     return Response.json({ error: "Job not found" }, { status: 404 });
   }
 
-  // ── Failed ────────────────────────────────────────────────────────────────
-
-  if (job.status === "failed") {
-    return Response.json(
-      { error: job.error ?? "Analysis failed", status: "failed" },
-      { status: 500 }
-    );
+  const isAdmin = session.user.role === "ADMIN";
+  if (record.userId !== session.user.id && !isAdmin) {
+    // Return 404 rather than 403 to avoid leaking job existence
+    return Response.json({ error: "Job not found" }, { status: 404 });
   }
 
-  // ── Still running ─────────────────────────────────────────────────────────
+  // ── Check in-memory job for live status (takes precedence for running jobs)
 
-  if (job.status === "pending" || job.status === "running") {
-    const pending: PendingReportResponse = {
-      status: job.status,
-      progress: job.progress,
-    };
-    return Response.json(pending, { status: 202 });
+  const job = getJob(id);
+
+  if (job) {
+    if (job.status === "failed") {
+      return Response.json(
+        { error: job.error ?? "Analysis failed", status: "failed" },
+        { status: 500 }
+      );
+    }
+
+    if (job.status === "pending" || job.status === "running") {
+      const pending: PendingReportResponse = {
+        status: job.status,
+        progress: job.progress,
+      };
+      return Response.json(pending, { status: 202 });
+    }
+
+    if (job.report) {
+      return Response.json(job.report, { status: 200 });
+    }
+
+    return Response.json({ error: "Report data is missing" }, { status: 500 });
   }
 
-  // ── Complete ──────────────────────────────────────────────────────────────
+  // ── Not in memory — use DB record (e.g. after server restart) ────────────
 
-  if (!job.report) {
-    // Shouldn't happen — complete jobs always have a report — but be safe
-    return Response.json(
-      { error: "Report data is missing" },
-      { status: 500 }
-    );
+  if (record.status === "failed") {
+    return Response.json({ error: "Analysis failed", status: "failed" }, { status: 500 });
   }
 
-  return Response.json(job.report, { status: 200 });
+  if (record.status !== "complete" || !record.reportJson) {
+    return Response.json({ status: record.status, progress: 0 }, { status: 202 });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return Response.json(record.reportJson as any as FitCheckReport, { status: 200 });
 }

@@ -25,6 +25,7 @@
 
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
+import { requireTier } from '@/lib/auth/require-tier';
 import type { FocusGroupMessage, FocusGroupPhase, Persona } from '@/lib/types';
 import {
   createFocusGroupSession,
@@ -55,6 +56,9 @@ function sseEvent(data: object): string {
 }
 
 export async function POST(req: NextRequest) {
+  const tierCheck = await requireTier("PRO");
+  if (!tierCheck.ok) return tierCheck.response;
+
   let body: FocusGroupChatRequest;
 
   try {

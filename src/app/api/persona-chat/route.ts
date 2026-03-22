@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generateText } from 'ai';
+import { requireTier } from '@/lib/auth/require-tier';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -79,6 +80,9 @@ Stay in character at all times. Do not break the fourth wall or reveal you are a
 }
 
 export async function POST(req: NextRequest) {
+  const tierCheck = await requireTier("PRO");
+  if (!tierCheck.ok) return tierCheck.response;
+
   let body: PersonaChatRequest;
 
   try {

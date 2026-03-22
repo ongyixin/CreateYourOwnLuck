@@ -42,3 +42,5 @@ coverage/
 # AI IDE settings
 .claude/
 .cursor/
+
+/src/generated/prisma

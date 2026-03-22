@@ -12,8 +12,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFocusGroupSession, setSessionAnalytics } from '@/lib/pipeline/store';
 import { generateFocusGroupAnalytics } from '@/lib/ai/focus-group-analyze';
+import { requireTier } from '@/lib/auth/require-tier';
 
 export async function POST(req: NextRequest) {
+  const tierCheck = await requireTier("PRO");
+  if (!tierCheck.ok) return tierCheck.response;
+
   let body: { sessionId: string };
 
   try {
@@ -45,6 +49,12 @@ export async function POST(req: NextRequest) {
   try {
     const analytics = await generateFocusGroupAnalytics(session);
     setSessionAnalytics(sessionId, analytics);
+
+    // Adjacent segment expansion is AGENCY-only — strip it for PRO users
+    if (tierCheck.tier !== "AGENCY") {
+      return NextResponse.json({ ...analytics, adjacentSegmentSignal: undefined });
+    }
+
     return NextResponse.json(analytics);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
