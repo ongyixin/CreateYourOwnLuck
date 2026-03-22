@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Download, Copy, Loader2 } from "lucide-react";
+import { ExternalLink, Download, Copy, Loader2, Share2, FileText } from "lucide-react";
+import Link from "next/link";
+import { useSession } from "next-auth/react";
 import AnimatedLogo from "@/components/animated-logo";
 import type { FitCheckReport } from "@/lib/types";
 
@@ -11,6 +13,7 @@ interface ReportHeaderProps {
 
 export function ReportHeader({ report }: ReportHeaderProps) {
   const [exporting, setExporting] = useState(false);
+  const { status } = useSession();
 
   const generatedDate = new Date(report.generatedAt).toLocaleDateString(
     "en-US",
@@ -75,6 +78,25 @@ export function ReportHeader({ report }: ReportHeaderProps) {
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
+        {status === "authenticated" && (
+          <Link
+            href="/reports"
+            className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm hover:border-neon-green hover:text-neon-green transition-all font-mono text-[10px] tracking-widest text-muted-foreground"
+            title="Past reports"
+          >
+            <FileText className="h-3 w-3" />
+            <span className="hidden md:inline">REPORTS</span>
+          </Link>
+        )}
+        <Link
+          href="/settings/connections"
+          className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm hover:border-neon-green hover:text-neon-green transition-all font-mono text-[10px] tracking-widest text-muted-foreground"
+          title="Manage social connections"
+        >
+          <Share2 className="h-3 w-3" />
+          <span className="hidden md:inline">CONNECT</span>
+        </Link>
+
         <button
           className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm hover:border-neon-green hover:text-neon-green transition-all font-mono text-[10px] tracking-widest text-muted-foreground"
           onClick={() => {

@@ -6,7 +6,7 @@ import { motion, useInView } from "framer-motion";
 import {
   Search, Users, Sparkles, Globe, ArrowRight,
   ChevronDown, Eye, BarChart3, Lightbulb, Target,
-  LogOut, Shield,
+  LogOut, Shield, FileText,
 } from "lucide-react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import AnimatedLogo from "@/components/animated-logo";
@@ -121,6 +121,13 @@ function NavBar() {
                 {tierInfo.label}
               </span>
             )}
+            <Link
+              href="/reports"
+              className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+            >
+              <FileText className="w-3 h-3" />
+              REPORTS
+            </Link>
             {isAdmin && (
               <Link href="/admin" className="flex items-center gap-1 font-mono text-[10px] text-neon-amber hover:text-neon-green transition-colors tracking-wider">
                 <Shield className="w-3 h-3" />

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, AlertCircle } from "lucide-react";
+import { ArrowRight, AlertCircle, FileText } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { ProgressTracker } from "@/components/processing/progress-tracker";
 import AnimatedLogo from "@/components/animated-logo";
 import ScanlineOverlay from "@/components/scanline-overlay";
@@ -25,6 +26,7 @@ function buildInitialStages(): ProgressStage[] {
 export default function ProcessingPage() {
   const params = useParams();
   const router = useRouter();
+  const { status } = useSession();
   const id = typeof params.id === "string" ? params.id : params.id?.[0] ?? "";
 
   const [stages, setStages] = useState<ProgressStage[]>(buildInitialStages);
@@ -105,9 +107,20 @@ export default function ProcessingPage() {
             FITCHECK<span className="blink">_</span>
           </span>
         </div>
-        <span className="font-mono text-[10px] text-muted-foreground tracking-widest">
-          JOB: {id.slice(0, 8)}
-        </span>
+        <div className="flex items-center gap-3">
+          {status === "authenticated" && (
+            <Link
+              href="/reports"
+              className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+            >
+              <FileText className="w-3 h-3" />
+              REPORTS
+            </Link>
+          )}
+          <span className="font-mono text-[10px] text-muted-foreground tracking-widest">
+            JOB: {id.slice(0, 8)}
+          </span>
+        </div>
       </nav>
 
       {/* Main */}

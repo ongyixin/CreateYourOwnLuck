@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Loader2, Cpu } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Cpu, FileText } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { StepIndicator } from "@/components/form/step-indicator";
 import { CompanyInfoStep } from "@/components/form/company-info-step";
@@ -80,6 +81,7 @@ function validateStep(step: number, form: FormState): Record<string, string> {
 
 export default function AnalyzePage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -178,8 +180,19 @@ export default function AnalyzePage() {
             </span>
           </div>
         </div>
-        <div className="font-mono text-[10px] tracking-widest text-muted-foreground">
-          SETUP WIZARD
+        <div className="flex items-center gap-3">
+          {status === "authenticated" && (
+            <Link
+              href="/reports"
+              className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+            >
+              <FileText className="w-3 h-3" />
+              REPORTS
+            </Link>
+          )}
+          <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            SETUP WIZARD
+          </span>
         </div>
       </nav>
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Clock, ExternalLink, AlertTriangle, Loader2, FileText } from "lucide-react";
+import { Clock, ExternalLink, AlertTriangle, Loader2, FileText, Trash2 } from "lucide-react";
 import ScanlineOverlay from "@/components/scanline-overlay";
 
 interface AnalysisSummary {
@@ -30,8 +30,12 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ jobId: string; company: string } | null>(null);
 
-  useEffect(() => {
+  const fetchReports = useCallback(() => {
+    setLoading(true);
+    setError(null);
     fetch("/api/reports")
       .then((r) => r.json())
       .then((d) => {
@@ -41,6 +45,46 @@ export default function ReportsPage() {
       .catch(() => setError("Failed to load reports"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  function requestDelete(jobId: string, company: string) {
+    setDeleteConfirm({ jobId, company });
+  }
+
+  function cancelDelete() {
+    setDeleteConfirm(null);
+  }
+
+  async function confirmDelete(jobId: string) {
+    setDeletingId(jobId);
+    try {
+      const res = await fetch(`/api/reports/${jobId}`, { method: "DELETE" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(body.error ?? "Failed to delete");
+        setDeleteConfirm(null);
+        return;
+      }
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              analyses: prev.analyses.filter((a) => a.jobId !== jobId),
+              total: prev.total - 1,
+            }
+          : null
+      );
+    } catch {
+      setError("Failed to delete");
+    } finally {
+      setDeleteConfirm(null);
+      setDeletingId(null);
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-background text-foreground font-mono">
@@ -127,14 +171,30 @@ export default function ReportsPage() {
                     >
                       {a.status}
                     </span>
-                    {a.status === "complete" && (
-                      <Link
-                        href={`/report/${a.jobId}`}
-                        className="flex items-center gap-1 text-[10px] text-neon-green hover:underline"
+                    <div className="flex items-center gap-2">
+                      {a.status === "complete" && (
+                        <Link
+                          href={`/report/${a.jobId}`}
+                          className="flex items-center gap-1 text-[10px] text-neon-green hover:underline"
+                        >
+                          VIEW REPORT <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => requestDelete(a.jobId, a.company)}
+                        disabled={deletingId === a.jobId}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete report"
                       >
-                        VIEW REPORT <ExternalLink className="w-3 h-3" />
-                      </Link>
-                    )}
+                        {deletingId === a.jobId ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                        <span className="hidden sm:inline">DELETE</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -165,6 +225,57 @@ export default function ReportsPage() {
           </Link>
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-background/80 backdrop-blur-sm">
+          <div
+            className="terminal-card border-red-400/60 max-w-md w-full py-6 px-6 shadow-xl"
+            role="alertdialog"
+            aria-labelledby="delete-title"
+            aria-describedby="delete-desc"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border-2 border-red-400/60 bg-red-400/10">
+                <AlertTriangle className="h-5 w-5 text-red-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="delete-title" className="font-mono text-sm font-bold tracking-wider text-foreground">
+                  DELETE REPORT?
+                </h2>
+                <p id="delete-desc" className="mt-1 text-[10px] text-muted-foreground tracking-wider leading-relaxed">
+                  <span className="font-semibold text-foreground">&quot;{deleteConfirm.company}&quot;</span> will be permanently removed. This cannot be undone.
+                </p>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={cancelDelete}
+                    disabled={deletingId === deleteConfirm.jobId}
+                    className="flex-1 border-2 border-border font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider text-muted-foreground hover:border-neon-green hover:text-neon-green transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    CANCEL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => confirmDelete(deleteConfirm.jobId)}
+                    disabled={deletingId === deleteConfirm.jobId}
+                    className="flex-1 border-2 border-red-400 font-mono font-bold px-4 py-2 rounded-sm text-xs tracking-wider text-red-400 hover:bg-red-400 hover:text-primary-foreground transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === deleteConfirm.jobId ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        DELETING...
+                      </span>
+                    ) : (
+                      "DELETE"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

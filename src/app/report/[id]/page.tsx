@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   Loader2,
   AlertTriangle,
@@ -13,6 +14,7 @@ import {
   TrendingUp,
   UserCircle,
   UsersRound,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ScanlineOverlay from "@/components/scanline-overlay";
@@ -270,15 +272,27 @@ export default function ReportPage() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const { status } = useSession();
   return (
     <div className="min-h-screen flex flex-col relative">
       <ScanlineOverlay />
       <nav className="relative z-40 border-b border-border px-6 py-3">
-        <div className="mx-auto max-w-5xl flex items-center gap-2">
-          <AnimatedLogo size={18} />
-          <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
-            FITCHECK<span className="blink">_</span>
-          </span>
+        <div className="mx-auto max-w-5xl flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <AnimatedLogo size={18} />
+            <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+              FITCHECK<span className="blink">_</span>
+            </span>
+          </div>
+          {status === "authenticated" && (
+            <Link
+              href="/reports"
+              className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+            >
+              <FileText className="w-3 h-3" />
+              REPORTS
+            </Link>
+          )}
         </div>
       </nav>
       <div className="relative z-20 flex flex-1 items-center justify-center px-6 py-12">

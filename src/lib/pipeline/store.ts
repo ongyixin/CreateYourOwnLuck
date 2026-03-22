@@ -49,6 +49,10 @@ export function getJob(id: string): AnalysisJob | undefined {
   return jobs.get(id);
 }
 
+export function deleteJob(id: string): void {
+  jobs.delete(id);
+}
+
 export function getAllJobs(): AnalysisJob[] {
   return Array.from(jobs.values());
 }
