@@ -17,6 +17,7 @@ import {
   Star,
   Twitter,
   Briefcase,
+  Activity,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import NeonBadge from "@/components/neon-badge";
@@ -36,6 +37,7 @@ const STAGE_ICONS: Record<PipelineStage, React.ElementType> = {
   analyze_actionables: Target,
   analyze_leads: TrendingUp,
   analyze_personas: UserCircle,
+  analyze_resonance: Activity,
   build_report: FileText,
 };
 
@@ -61,6 +63,7 @@ const STAGE_GROUPS: { label: string; stages: PipelineStage[]; color: string }[] 
       "analyze_actionables",
       "analyze_leads",
       "analyze_personas",
+      "analyze_resonance",
     ],
   },
   {

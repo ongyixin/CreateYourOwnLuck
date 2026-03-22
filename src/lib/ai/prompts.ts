@@ -521,3 +521,99 @@ For painPointGaps: be specific about where the current brand fails to speak to w
 
 ${context}`;
 }
+
+// ============================================================
+// Section 6: Brand Resonance Map
+// ============================================================
+
+const ThemeSourceBreakdownSchema = z.object({
+  sourceType: z
+    .enum(['website', 'reviews', 'social', 'search', 'video'])
+    .describe('Which data source type this breakdown covers'),
+  present: z.boolean().describe('Whether this theme appears in this source type'),
+  sentiment: z
+    .number()
+    .int()
+    .min(-100)
+    .max(100)
+    .describe('-100 (very negative) to +100 (very positive) sentiment in this source type; use 0 if not present'),
+});
+
+const ThemeHotspotSchema = z.object({
+  theme: z
+    .string()
+    .describe('Short descriptive phrase for the market theme, e.g. "ease of use", "pricing confusion", "enterprise trust"'),
+  frequencyScore: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .describe('0–100: how prominently and frequently this theme appears across all collected sources'),
+  sentimentScore: z
+    .number()
+    .int()
+    .min(-100)
+    .max(100)
+    .describe('-100 (overwhelmingly negative) to +100 (overwhelmingly positive) — net market perception of this theme'),
+  icpImportance: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .describe('0–100: how important this theme is to the target ICP based on their pain points, motivations, and the brand positioning'),
+  category: z
+    .enum(['leverage', 'fix', 'develop', 'monitor'])
+    .describe(
+      'Quadrant: "leverage" = high frequency + positive (amplify), "fix" = high frequency + negative (urgent), "develop" = low frequency + positive (opportunity), "monitor" = low frequency + negative (watch)',
+    ),
+  summary: z
+    .string()
+    .describe('1-sentence strategic summary: what this theme means for the brand and what action it implies'),
+  sources: z
+    .array(ThemeSourceBreakdownSchema)
+    .length(5)
+    .describe('One entry per source type: website, reviews, social, search, video — in that order'),
+  evidence: z.array(EvidenceSchema).min(1).max(3).describe('1–3 verbatim quotes or signals supporting the frequency/sentiment scores'),
+});
+
+export const BrandResonanceMapSchema = z.object({
+  themes: z
+    .array(ThemeHotspotSchema)
+    .min(8)
+    .max(15)
+    .describe('8–15 distinct market themes extracted from all sources. Cover both positive and negative territory. Vary frequency and sentiment across themes.'),
+  insight: z
+    .string()
+    .describe('1–2 sentence strategic overview: what the resonance landscape as a whole reveals about where the brand stands in the market'),
+});
+
+export function buildResonanceMapPrompt(request: AnalysisRequest, context: string): string {
+  return `Map the brand resonance landscape for **${request.companyName}** (${request.websiteUrl}).${request.goal ? `\n\nTeam's stated goal: "${request.goal}"` : ''}
+
+Your task is to extract 8–15 distinct market themes that appear across all the collected sources (website copy, structured reviews, social mentions, search results, video content, autocomplete signals). For each theme:
+
+1. **frequencyScore** (0–100): How often does this theme surface? Consider mentions across all source types — high if it appears in multiple sources and is repeated.
+
+2. **sentimentScore** (-100 to +100): What is the net market perception? Positive = customers praise it or associate it with the brand positively. Negative = customers complain about it or it generates friction. Use the full range — don't cluster everything near 0.
+
+3. **icpImportance** (0–100): How much does the target ICP care about this theme? Cross-reference the brand's implied target customer against the themes they are most likely to evaluate.
+
+4. **category**: Classify into one of four quadrants:
+   - **leverage**: frequency ≥ 50 AND sentiment ≥ 0 — themes resonating positively at scale, worth amplifying
+   - **fix**: frequency ≥ 50 AND sentiment < 0 — high-friction themes causing real damage at scale
+   - **develop**: frequency < 50 AND sentiment ≥ 0 — promising themes not yet fully exploited
+   - **monitor**: frequency < 50 AND sentiment < 0 — weak negative signals, watch but do not prioritize
+
+5. **sources**: For each source type (website, reviews, social, search, video), mark whether the theme appears and the sentiment in that channel. Return exactly 5 entries in the order: website, reviews, social, search, video.
+
+Rules:
+- Be specific about theme names: not "product quality" but "onboarding speed" or "API reliability"
+- Cover themes that span different dimensions: UX, pricing, trust, integrations, support, positioning, community, etc.
+- Distribute themes across all four quadrants — don't put everything in one quadrant
+- Ground frequency and sentiment in the actual data, not assumptions
+- Each theme must have at least one evidence quote from the scraped material
+
+---
+
+${context}`;
+}

@@ -19,6 +19,7 @@ import type {
   Actionables,
   LeadSuggestions,
   IcpStudio,
+  BrandResonanceMap,
   FitCheckReport,
   ScrapedData,
 } from "../types";
@@ -31,6 +32,7 @@ import {
   generateActionables,
   generateLeadSuggestions,
   generateIcpStudio,
+  generateResonanceMap,
   type AnalysisContext,
 } from "../ai/provider";
 import {
@@ -114,14 +116,16 @@ export async function runPipeline(
   updateStage(jobId, "analyze_actionables", "running");
   updateStage(jobId, "analyze_leads", "running");
   updateStage(jobId, "analyze_personas", "running");
+  updateStage(jobId, "analyze_resonance", "running");
 
-  // Run all 5 in parallel; each updates its own stage on completion.
+  // Run all 6 in parallel; each updates its own stage on completion.
   const [
     brandResult,
     icpResult,
     actionablesResult,
     leadsResult,
     personasResult,
+    resonanceResult,
   ] = await Promise.allSettled([
     generateBrandPerception(ctx).then((v) => {
       updateStage(jobId, "analyze_brand", "complete");
@@ -141,6 +145,10 @@ export async function runPipeline(
     }),
     generateIcpStudio(ctx).then((v) => {
       updateStage(jobId, "analyze_personas", "complete");
+      return v;
+    }),
+    generateResonanceMap(ctx).then((v) => {
+      updateStage(jobId, "analyze_resonance", "complete");
       return v;
     }),
   ]);
@@ -181,6 +189,15 @@ export async function runPipeline(
     fallbackIcpStudio(),
     pipelineWarnings
   );
+  let resonanceMap: BrandResonanceMap | undefined;
+  if (resonanceResult.status === "fulfilled") {
+    resonanceMap = resonanceResult.value;
+  } else {
+    const msg = errorMessage(resonanceResult.reason);
+    console.error(`[Pipeline ${jobId}] AI stage "analyze_resonance" failed:`, resonanceResult.reason);
+    updateStage(jobId, "analyze_resonance", "failed", msg);
+    pipelineWarnings.push(`analyze_resonance failed: ${msg}`);
+  }
 
   // ── Stage 9: Build report ─────────────────────────────────────────────────
 
@@ -196,6 +213,7 @@ export async function runPipeline(
     actionables,
     leadSuggestions,
     icpStudio,
+    ...(resonanceMap ? { resonanceMap } : {}),
     warnings: pipelineWarnings,
   };
 
