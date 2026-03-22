@@ -595,6 +595,152 @@ export interface FocusGroupAnalytics {
 }
 
 // ------------------------------------------------------------
+// 7c. Experiment Mode (extends focus group panel orchestration)
+// ------------------------------------------------------------
+
+export type ExperimentGoal =
+  | "new_release"
+  | "pricing_test"
+  | "positioning_test"
+  | "lead_intent"
+  | "messaging_test"
+  | "competitive_displacement";
+
+export type ExperimentType =
+  | "ab_test"
+  | "concept_test"
+  | "price_sensitivity"
+  | "message_recall"
+  | "competitive_displacement";
+
+export type ExperimentSuccessMetric =
+  | "conversion_likelihood"
+  | "objection_reduction"
+  | "recall_score"
+  | "willingness_to_pay"
+  | "displacement_rate";
+
+/** One executable step the orchestrator runs in order (controlled session). */
+export interface ExperimentOrchestrationStep {
+  type: "stimulus" | "probe" | "recall_check" | "transition";
+  /** Short label shown in UI / transcript */
+  label: string;
+  /** Stimulus-side only: which A/B arm sees this step (both arms run in parallel when ab_test). */
+  variant?: "A" | "B" | "shared";
+  /** Full moderator instruction injected into persona system prompt */
+  moderatorPrompt: string;
+  /** For probe / recall — exact question personas must answer */
+  probeQuestion?: string;
+}
+
+/** Generated after the form; user confirms before the session runs. */
+export interface ExperimentDesignDocument {
+  testableHypothesis: string;
+  methodology: string;
+  stimulusPresentationOrder: string[];
+  probeQuestions: string[];
+  positiveResult: string;
+  neutralResult: string;
+  negativeResult: string;
+  /** Phrases used to score message recall during the session */
+  recallTargets: string[];
+  steps: ExperimentOrchestrationStep[];
+}
+
+export interface ExperimentLiveMetrics {
+  /** Market-weighted "conversion" proxy: positive − negative, normalized per variant */
+  conversionDeltaAB: number | null;
+  variantAScore: number;
+  variantBScore: number;
+  /** Cumulative count of skeptical + negative reactions */
+  objectionCount: number;
+  /** Personas (reactions) that mentioned a recall target */
+  recallHits: number;
+  totalReactions: number;
+}
+
+export interface ExperimentPersonaVariantScore {
+  personaId: string;
+  personaName: string;
+  variant: "A" | "B" | "pooled";
+  conversionScore: number;
+  recallHit: boolean;
+  topObjection?: string;
+}
+
+export interface ExperimentResultsReport {
+  personaScoresByVariant: ExperimentPersonaVariantScore[];
+  weightedPmfDelta: number;
+  hypothesisStatus: "supported" | "inconclusive" | "not_supported";
+  topObjectionsByVariant: Record<string, WeightedObjection[]>;
+  messageRecallComparison: string;
+  plainLanguageRecommendation: string;
+  confidenceLevel: "low" | "medium" | "high";
+  disclaimer: string;
+}
+
+export interface ExperimentSession {
+  id: string;
+  jobId: string;
+  companyName?: string;
+  goal: ExperimentGoal;
+  experimentType: ExperimentType;
+  successMetric: ExperimentSuccessMetric;
+  personas: Persona[];
+  personaIdsVariantA: string[];
+  personaIdsVariantB: string[];
+  design: ExperimentDesignDocument;
+  /** Flattened transcript: panel-style reactions with optional variant tag */
+  transcript: ExperimentTranscriptEntry[];
+  liveMetrics: ExperimentLiveMetrics;
+  results?: ExperimentResultsReport;
+  status: "active" | "complete";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExperimentTranscriptEntry {
+  id: string;
+  stepIndex: number;
+  stepLabel: string;
+  variant?: "A" | "B";
+  personaId: string;
+  personaName: string;
+  content: string;
+  sentiment: PanelReaction["sentiment"];
+  timestamp: string;
+}
+
+/** Client → POST /api/experiment/design */
+export interface ExperimentDesignRequest {
+  goal: ExperimentGoal;
+  experimentType: ExperimentType;
+  successMetric: ExperimentSuccessMetric;
+  hypothesis?: string;
+  stimulusSummary: string;
+  /** True when user will supply two stimulus variants (A/B) */
+  hasAbVariants: boolean;
+  adjacentProfileNote?: string;
+}
+
+/** Client → POST /api/experiment/run */
+export interface ExperimentRunRequest {
+  jobId: string;
+  companyName?: string;
+  goal: ExperimentGoal;
+  successMetric: ExperimentSuccessMetric;
+  design: ExperimentDesignDocument;
+  personas: Persona[];
+  experimentType: ExperimentType;
+  /** Plain-text stimulus; optional when media alone carries the creative */
+  stimulus?: string;
+  stimulusVariantB?: string;
+  media?: MediaAttachment;
+  mediaVariantB?: MediaAttachment;
+  adjacentProfileNote?: string;
+}
+
+// ------------------------------------------------------------
 // 8. Pipeline stage labels (UI display)
 // ------------------------------------------------------------
 

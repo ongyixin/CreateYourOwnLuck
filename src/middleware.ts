@@ -57,6 +57,8 @@ export const config = {
     "/api/parse-pdf/:path*",
     "/api/persona-chat/:path*",
     "/api/focus-group/:path*",
+    "/experiment/:path*",
+    "/api/experiment/:path*",
     "/api/checkout/:path*",
     "/api/admin/:path*",
   ],

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import {
   Users,
   Send,
@@ -13,6 +14,7 @@ import {
   LayoutGrid,
   AtSign,
   X,
+  Beaker,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
@@ -601,6 +603,15 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
           <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">
             FOCUS GROUP
           </h2>
+          {(isAdmin || tier === "PRO" || tier === "AGENCY") && (
+            <Link
+              href={`/experiment/new?jobId=${encodeURIComponent(jobId)}`}
+              className="mt-2 inline-flex items-center gap-1.5 font-mono text-[10px] text-neon-cyan/80 hover:text-neon-cyan tracking-wider transition-colors"
+            >
+              <Beaker className="h-3 w-3" />
+              EXPERIMENT MODE
+            </Link>
+          )}
         </div>
 
         {/* Mode toggle */}

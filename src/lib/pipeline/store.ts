@@ -11,6 +11,7 @@
 import type {
   AnalysisJob,
   AnalysisRequest,
+  ExperimentSession,
   FitCheckReport,
   FocusGroupAnalytics,
   FocusGroupMessage,
@@ -35,6 +36,8 @@ declare global {
   var __fitcheckJobs: Map<string, AnalysisJob> | undefined;
   // eslint-disable-next-line no-var
   var __fitcheckFocusGroups: Map<string, FocusGroupSession> | undefined;
+  // eslint-disable-next-line no-var
+  var __fitcheckExperiments: Map<string, ExperimentSession> | undefined;
 }
 
 const jobs: Map<string, AnalysisJob> =
@@ -42,6 +45,9 @@ const jobs: Map<string, AnalysisJob> =
 
 const focusGroups: Map<string, FocusGroupSession> =
   globalThis.__fitcheckFocusGroups ?? (globalThis.__fitcheckFocusGroups = new Map());
+
+const experiments: Map<string, ExperimentSession> =
+  globalThis.__fitcheckExperiments ?? (globalThis.__fitcheckExperiments = new Map());
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
@@ -213,6 +219,29 @@ export function setSessionAnalytics(
     ...session,
     analytics,
     status: "complete",
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+// ─── Experiment Mode Store ───────────────────────────────────────────────────
+
+export function createExperimentSession(session: ExperimentSession): void {
+  experiments.set(session.id, session);
+}
+
+export function getExperimentSession(id: string): ExperimentSession | undefined {
+  return experiments.get(id);
+}
+
+export function patchExperimentSession(
+  id: string,
+  patch: Partial<ExperimentSession>
+): void {
+  const cur = experiments.get(id);
+  if (!cur) return;
+  experiments.set(id, {
+    ...cur,
+    ...patch,
     updatedAt: new Date().toISOString(),
   });
 }
