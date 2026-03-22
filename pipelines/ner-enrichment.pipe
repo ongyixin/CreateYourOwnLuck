@@ -1,0 +1,47 @@
+{
+  "name": "FitCheck — NER Enrichment",
+  "description": "Extracts named entities (people, organisations, products, locations) from scraped company and competitor text. Used to enrich FitCheck brand perception analysis with structured entity data.",
+  "version": 1,
+  "source": "webhook_source",
+  "components": [
+    {
+      "id": "webhook_source",
+      "provider": "webhook",
+      "name": "Text Input",
+      "description": "Receives { text: string } from the FitCheck Node.js API via the rocketride SDK.",
+      "config": {
+        "lane": "text"
+      },
+      "ui": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "ner_processor",
+      "provider": "ner",
+      "name": "Named Entity Recognition",
+      "description": "Identifies PERSON, ORG, PRODUCT, LOC, DATE entities using the server-side NER model.",
+      "config": {
+        "entity_types": ["PERSON", "ORG", "PRODUCT", "LOC", "DATE", "MONEY"],
+        "language": "en",
+        "confidence_threshold": 0.7
+      },
+      "input": [
+        { "lane": "text", "from": "webhook_source" }
+      ],
+      "ui": { "x": 400, "y": 200 }
+    },
+    {
+      "id": "response_output",
+      "provider": "response",
+      "name": "JSON Response",
+      "description": "Returns { entities: NerEntity[], originalText: string } back to the SDK caller.",
+      "config": {
+        "format": "json"
+      },
+      "input": [
+        { "lane": "data", "from": "ner_processor" }
+      ],
+      "ui": { "x": 700, "y": 200 }
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

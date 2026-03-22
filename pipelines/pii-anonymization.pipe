@@ -1,0 +1,47 @@
+{
+  "name": "FitCheck — PII Anonymization",
+  "description": "Redacts personal identifiable information (names, emails, phone numbers, addresses, SSNs) from scraped text before it is persisted to the database or sent to LLMs.",
+  "version": 1,
+  "source": "webhook_source",
+  "components": [
+    {
+      "id": "webhook_source",
+      "provider": "webhook",
+      "name": "Text Input",
+      "description": "Receives { text: string } from the FitCheck Node.js API.",
+      "config": {
+        "lane": "text"
+      },
+      "ui": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "pii_processor",
+      "provider": "pii",
+      "name": "PII Anonymizer",
+      "description": "Detects and redacts PII entities, replacing them with type-labelled placeholders (e.g. [EMAIL], [PHONE]).",
+      "config": {
+        "entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "LOCATION", "URL", "IP_ADDRESS", "CREDIT_CARD"],
+        "replacement_strategy": "entity_type",
+        "language": "en"
+      },
+      "input": [
+        { "lane": "text", "from": "webhook_source" }
+      ],
+      "ui": { "x": 400, "y": 200 }
+    },
+    {
+      "id": "response_output",
+      "provider": "response",
+      "name": "JSON Response",
+      "description": "Returns { anonymized_text: string, redacted_count: number } to the SDK caller.",
+      "config": {
+        "format": "json"
+      },
+      "input": [
+        { "lane": "data", "from": "pii_processor" }
+      ],
+      "ui": { "x": 700, "y": 200 }
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

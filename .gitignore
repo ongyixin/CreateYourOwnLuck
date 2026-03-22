@@ -43,4 +43,9 @@ coverage/
 .claude/
 .cursor/
 
+# RocketRide — pipeline definitions are committed so the team shares them,
+# but local override files and generated engine artefacts are excluded.
+pipelines/local/
+*.pipe.lock
+
 /src/generated/prisma

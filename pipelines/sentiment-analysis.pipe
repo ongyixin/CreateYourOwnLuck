@@ -1,0 +1,46 @@
+{
+  "name": "FitCheck — Sentiment Analysis",
+  "description": "Scores the sentiment of scraped review or social mention text. Returns a numeric score (-1 to 1), a label (positive/negative/neutral), and a confidence value. Used as a secondary signal alongside the LLM brand perception analysis.",
+  "version": 1,
+  "source": "webhook_source",
+  "components": [
+    {
+      "id": "webhook_source",
+      "provider": "webhook",
+      "name": "Text Input",
+      "description": "Receives { text: string } from the FitCheck Node.js API.",
+      "config": {
+        "lane": "text"
+      },
+      "ui": { "x": 100, "y": 200 }
+    },
+    {
+      "id": "sentiment_processor",
+      "provider": "sentiment",
+      "name": "Sentiment Scorer",
+      "description": "Classifies text sentiment using the built-in sentiment model.",
+      "config": {
+        "language": "en",
+        "granularity": "document"
+      },
+      "input": [
+        { "lane": "text", "from": "webhook_source" }
+      ],
+      "ui": { "x": 400, "y": 200 }
+    },
+    {
+      "id": "response_output",
+      "provider": "response",
+      "name": "JSON Response",
+      "description": "Returns { score: number, label: string, confidence: number } to the SDK caller.",
+      "config": {
+        "format": "json"
+      },
+      "input": [
+        { "lane": "data", "from": "sentiment_processor" }
+      ],
+      "ui": { "x": 700, "y": 200 }
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

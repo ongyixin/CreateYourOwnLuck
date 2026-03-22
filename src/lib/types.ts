@@ -456,7 +456,7 @@ export type ReportResponse = FitCheckReport | PendingReportResponse;
 export type FocusGroupPhase = "probe" | "flip";
 
 /** Which focus group interaction mode the user is currently in. */
-export type FocusGroupMode = "chat" | "panel";
+export type FocusGroupMode = "chat" | "panel" | "experiment";
 
 export interface FocusGroupMessage {
   id: string;
