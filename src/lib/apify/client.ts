@@ -1,8 +1,9 @@
 /**
  * Apify client wrapper.
  *
- * Keeps a single ApifyClient instance per process (no singleton needed at
- * hackathon scale — each call constructs a fresh client, which is fine).
+ * Keeps a single ApifyClient instance per process, lazily initialised on
+ * the first runActor call. Concurrent calls are all safe — the singleton is
+ * set synchronously before any await so there is no race condition.
  *
  * Owned by: apify agent
  */
@@ -15,11 +16,15 @@ const DEFAULT_TIMEOUT_SECS = 120;
 /** Max number of dataset items to fetch per run (safety cap). */
 const MAX_DATASET_ITEMS = 200;
 
+/** Module-level singleton — constructed once, reused for all actor calls. */
+let _client: ApifyClient | null = null;
+
 /**
- * Build a configured ApifyClient, validating the token.
+ * Return the shared ApifyClient, constructing it on first call.
  * Throws early with a clear message if APIFY_TOKEN is missing.
  */
-function buildClient(): ApifyClient {
+function getClient(): ApifyClient {
+  if (_client) return _client;
   const token = process.env.APIFY_TOKEN;
   if (!token) {
     throw new Error(
@@ -27,7 +32,8 @@ function buildClient(): ApifyClient {
         "Add it to .env.local before running the pipeline."
     );
   }
-  return new ApifyClient({ token });
+  _client = new ApifyClient({ token });
+  return _client;
 }
 
 /**
@@ -45,7 +51,7 @@ export async function runActor(
   timeoutSecs: number = DEFAULT_TIMEOUT_SECS,
   memoryMbytes: number = 256
 ): Promise<unknown[]> {
-  const client = buildClient();
+  const client = getClient();
 
   const run = await client.actor(actorId).call(input, {
     timeout: timeoutSecs,

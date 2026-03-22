@@ -25,7 +25,7 @@ import type { MediaAttachment } from '@/lib/types';
 
 const MAX_CONTENT_CHARS = 8_000;
 const CRAWL_TIMEOUT_SECS = 60;
-const CRAWL_MEMORY_MB = 1024;
+const CRAWL_MEMORY_MB = 512;
 
 // ─── YouTube detection ────────────────────────────────────────────────────────
 

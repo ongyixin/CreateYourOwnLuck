@@ -38,8 +38,9 @@ export function buildWebsiteCrawlInput(
     maxCrawlDepth: 3,
     // Ignore binary assets and very large files
     excludeUrlGlobs: ["**/*.{pdf,zip,png,jpg,jpeg,gif,svg,woff,woff2,ttf,ico}"],
-    // Respectful crawling
-    maxRequestsPerMinute: 30,
+    // Cheerio crawls only fetch small marketing pages; 60 rpm is still
+    // respectful while halving crawl time for low page-count runs.
+    maxRequestsPerMinute: 60,
   };
 }
 
