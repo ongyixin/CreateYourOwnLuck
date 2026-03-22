@@ -2,8 +2,8 @@
  * POST /api/focus-group/panel
  *
  * Panel mode endpoint: accepts optional visual media + text stimulus,
- * runs all personas IN PARALLEL (unlike the sequential chat route),
- * and streams results as each persona finishes via SSE.
+ * runs personas SEQUENTIALLY (each hears the previous ones), and streams
+ * results turn by turn via SSE.
  *
  * SSE event types:
  *   { type: 'session_id', sessionId: string }
@@ -62,25 +62,23 @@ export async function POST(req: NextRequest) {
 
   const resolvedSessionId = session.id;
 
-  // Store the user message (stimulus) in the session for analytics compatibility
+  // Persist user message for analytics
   if (stimulus?.trim()) {
-    const userMsg: FocusGroupMessage = {
+    addFocusGroupMessage(resolvedSessionId, {
       id: randomUUID(),
       role: 'user',
       content: stimulus.trim(),
       timestamp: new Date().toISOString(),
       mediaType: media?.type,
-    };
-    addFocusGroupMessage(resolvedSessionId, userMsg);
+    });
   } else if (media) {
-    const userMsg: FocusGroupMessage = {
+    addFocusGroupMessage(resolvedSessionId, {
       id: randomUUID(),
       role: 'user',
       content: `[Shared ${media.type}: ${media.name}]`,
       timestamp: new Date().toISOString(),
       mediaType: media.type,
-    };
-    addFocusGroupMessage(resolvedSessionId, userMsg);
+    });
   }
 
   const stream = new ReadableStream({
@@ -89,28 +87,30 @@ export async function POST(req: NextRequest) {
       const send = (data: object) => controller.enqueue(enc.encode(sseEvent(data)));
 
       try {
-        // Emit session ID immediately so the client can track it
         send({ type: 'session_id', sessionId: resolvedSessionId });
 
-        // Emit persona_reaction_start for all personas right away (they run in parallel)
-        for (const persona of personas) {
-          send({ type: 'persona_reaction_start', personaId: persona.id, personaName: persona.name });
-        }
-
-        // Run all reactions in parallel; callback fires as each finishes
+        // Run personas sequentially; emit start/complete per turn so the
+        // client knows exactly when each person begins speaking.
         await generateAllPanelReactions(
           personas,
           stimulus,
           media as MediaAttachment | undefined,
           ({ reaction, error, personaId }) => {
+            // Announce this speaker
+            const persona = personas.find((p) => p.id === personaId);
+            send({
+              type: 'persona_reaction_start',
+              personaId,
+              personaName: persona?.name ?? 'Unknown',
+            });
+
             if (error || !reaction) {
-              // Send a graceful error for this specific persona
               send({
                 type: 'persona_reaction_complete',
                 reaction: {
                   personaId,
-                  personaName: personas.find((p) => p.id === personaId)?.name ?? 'Unknown',
-                  content: 'I couldn\'t form a reaction right now.',
+                  personaName: persona?.name ?? 'Unknown',
+                  content: "I couldn't form a reaction right now.",
                   sentiment: 'neutral',
                   timestamp: new Date().toISOString(),
                 },
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
               return;
             }
 
-            // Persist as a focus group message so analytics pipeline can read it
+            // Persist for analytics
             const personaMsg: FocusGroupMessage = {
               id: randomUUID(),
               role: 'persona',
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
             addFocusGroupMessage(resolvedSessionId, personaMsg);
 
             send({ type: 'persona_reaction_complete', reaction });
-          }
+          },
         );
 
         send({ type: 'round_complete', sessionId: resolvedSessionId });

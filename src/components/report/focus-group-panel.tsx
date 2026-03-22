@@ -20,8 +20,11 @@ import {
   Video,
   AlertTriangle,
   Users,
-  RefreshCw,
   BarChart3,
+  Link,
+  Globe,
+  Radio,
+  MessageSquarePlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FocusGroupAnalytics, MediaAttachment, PanelReaction, Persona } from "@/lib/types";
@@ -42,43 +45,32 @@ const TTS_VOICES = ["alloy", "echo", "fable", "nova", "onyx", "shimmer"] as cons
 
 const SENTIMENT_STYLES: Record<PanelReaction["sentiment"], string> = {
   positive: "border-neon-green/40 bg-neon-green/5",
-  neutral: "border-border bg-card",
-  skeptical: "border-neon-amber/40 bg-neon-amber/5",
+  neutral:  "border-border bg-card",
+  skeptical:"border-neon-amber/40 bg-neon-amber/5",
   negative: "border-neon-pink/40 bg-neon-pink/5",
 };
 
 const SENTIMENT_LABEL_STYLES: Record<PanelReaction["sentiment"], string> = {
   positive: "text-neon-green",
-  neutral: "text-muted-foreground",
-  skeptical: "text-neon-amber",
+  neutral:  "text-muted-foreground",
+  skeptical:"text-neon-amber",
   negative: "text-neon-pink",
 };
 
 const SENTIMENT_DOTS: Record<PanelReaction["sentiment"], string> = {
   positive: "bg-neon-green",
-  neutral: "bg-muted-foreground",
-  skeptical: "bg-neon-amber",
+  neutral:  "bg-muted-foreground",
+  skeptical:"bg-neon-amber",
   negative: "bg-neon-pink",
 };
 
 function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
 // ─── Media Preview ─────────────────────────────────────────────────────────────
 
-function MediaPreview({
-  media,
-  onRemove,
-}: {
-  media: MediaAttachment;
-  onRemove: () => void;
-}) {
+function MediaPreview({ media, onRemove }: { media: MediaAttachment; onRemove: () => void }) {
   return (
     <div className="relative border border-border rounded-sm overflow-hidden bg-secondary/20 group">
       <button
@@ -90,22 +82,14 @@ function MediaPreview({
       </button>
 
       {media.type === "image" && media.dataUrl && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={media.dataUrl}
-          alt={media.name}
-          className="w-full max-h-48 object-contain"
-        />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={media.dataUrl} alt={media.name} className="w-full max-h-48 object-contain" />
       )}
 
       {media.type === "video" && media.dataUrl && (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={media.dataUrl}
-            alt={`${media.name} (first frame)`}
-            className="w-full max-h-48 object-contain"
-          />
+          <img src={media.dataUrl} alt={`${media.name} (first frame)`} className="w-full max-h-48 object-contain" />
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="h-10 w-10 rounded-full bg-background/70 border border-border flex items-center justify-center">
               <Video className="h-4 w-4 text-neon-purple" />
@@ -122,17 +106,34 @@ function MediaPreview({
           <div className="min-w-0 flex-1">
             <p className="font-mono text-xs font-bold text-foreground truncate">{media.name}</p>
             <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
-              PDF — {media.extractedText
-                ? `${Math.round(media.extractedText.length / 4)} words extracted`
-                : "No text extracted"}
+              PDF — {media.extractedText ? `${Math.round(media.extractedText.length / 4)} words extracted` : "No text extracted"}
             </p>
           </div>
         </div>
       )}
 
-      <div className="px-3 pb-2">
-        <p className="font-mono text-[9px] text-muted-foreground/60 truncate">{media.name}</p>
-      </div>
+      {media.type === "url" && (
+        <div className="flex items-center gap-3 p-4">
+          <div className="h-10 w-10 rounded-sm bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center flex-shrink-0">
+            <Globe className="h-5 w-5 text-neon-cyan" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-xs font-bold text-foreground truncate">{media.name}</p>
+            {media.sourceUrl && (
+              <p className="font-mono text-[10px] text-muted-foreground mt-0.5 truncate">{media.sourceUrl}</p>
+            )}
+            <p className="font-mono text-[10px] text-neon-cyan/70 mt-0.5">
+              {media.extractedText ? `${Math.round(media.extractedText.length / 4)} words scraped` : "No content extracted"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {(media.type === "image" || media.type === "video") && (
+        <div className="px-3 pb-2">
+          <p className="font-mono text-[9px] text-muted-foreground/60 truncate">{media.name}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -143,145 +144,88 @@ function PersonaReactionCard({
   persona,
   personaIndex,
   reaction,
-  isLoading,
-  ttsVoice,
+  followUp,
+  isThinking,
+  isSpeaking,
+  isFollowingUp,
+  audioUrl,
+  onReplayRequest,
 }: {
   persona: Persona;
   personaIndex: number;
   reaction: PanelReaction | null;
-  isLoading: boolean;
-  ttsVoice: string;
+  followUp: PanelReaction | null;
+  isThinking: boolean;
+  isSpeaking: boolean;
+  isFollowingUp: boolean;
+  audioUrl: string | null;
+  onReplayRequest: (personaId: string) => void;
 }) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [isFetchingAudio, setIsFetchingAudio] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
   const color = AVATAR_COLORS[personaIndex % AVATAR_COLORS.length];
-
-  const fetchAndPlayAudio = useCallback(async (text: string) => {
-    if (isMuted) return;
-    setIsFetchingAudio(true);
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: ttsVoice }),
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setAudioUrl(url);
-
-      if (audioRef.current) {
-        audioRef.current.src = url;
-        audioRef.current.play().catch(() => null);
-        setIsPlaying(true);
-      }
-    } finally {
-      setIsFetchingAudio(false);
-    }
-  }, [isMuted, ttsVoice]);
-
-  // Auto-play when reaction arrives
-  useEffect(() => {
-    if (reaction && !audioUrl) {
-      fetchAndPlayAudio(reaction.content);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reaction?.content]);
-
-  // Cleanup blob URL on unmount
-  useEffect(() => {
-    return () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-    };
-  }, [audioUrl]);
-
-  const handleReplay = () => {
-    if (audioRef.current && audioUrl) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => null);
-      setIsPlaying(true);
-    }
-  };
-
-  const toggleMute = () => {
-    setIsMuted((m) => !m);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-    }
-  };
-
-  const sentimentStyle = reaction ? SENTIMENT_STYLES[reaction.sentiment] : "border-border bg-card";
-  const sentimentLabelStyle = reaction ? SENTIMENT_LABEL_STYLES[reaction.sentiment] : "text-muted-foreground";
-  const sentimentDot = reaction ? SENTIMENT_DOTS[reaction.sentiment] : "bg-muted-foreground";
+  // Sentiment is driven by the latest available reaction
+  const latest = followUp ?? reaction;
+  const sentimentStyle  = latest ? SENTIMENT_STYLES[latest.sentiment]       : "border-border bg-card";
+  const sentimentLabel  = latest ? SENTIMENT_LABEL_STYLES[latest.sentiment] : "text-muted-foreground";
+  const sentimentDot    = latest ? SENTIMENT_DOTS[latest.sentiment]         : "bg-muted-foreground";
 
   return (
     <div
       className={cn(
-        "rounded-sm border-2 p-4 flex flex-col gap-3 transition-all",
-        sentimentStyle
+        "rounded-sm border-2 p-4 flex flex-col gap-3 transition-all duration-300",
+        sentimentStyle,
+        isSpeaking && "ring-2 ring-neon-cyan/40 ring-offset-1 ring-offset-background"
       )}
     >
-      {/* Card header */}
+      {/* Header */}
       <div className="flex items-center gap-2.5">
-        <div
-          className={cn(
-            "h-8 w-8 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[10px] font-bold flex-shrink-0",
-            color
-          )}
-        >
+        <div className={cn(
+          "h-8 w-8 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[10px] font-bold flex-shrink-0",
+          color,
+          isSpeaking && "animate-pulse"
+        )}>
           {getInitials(persona.name)}
         </div>
+
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-xs font-bold text-foreground truncate">
-            {persona.name}
-          </p>
+          <p className="font-mono text-xs font-bold text-foreground truncate">{persona.name}</p>
           <p className="text-muted-foreground text-[10px] truncate">{persona.title}</p>
         </div>
 
-        {/* Sentiment dot + audio controls */}
+        {/* Status / sentiment */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {reaction && (
+          {(isSpeaking || isFollowingUp) && (
             <div className="flex items-center gap-1">
-              <span className={cn("h-2 w-2 rounded-full inline-block", sentimentDot)} />
-              <span className={cn("font-mono text-[9px] uppercase tracking-widest", sentimentLabelStyle)}>
-                {reaction.sentiment}
+              <Radio className="h-3 w-3 text-neon-cyan animate-pulse" />
+              <span className="font-mono text-[9px] text-neon-cyan tracking-widest">
+                {isFollowingUp && !isSpeaking ? "FOLLOWING UP..." : "SPEAKING"}
               </span>
             </div>
           )}
-          {reaction && (
-            <div className="flex items-center gap-1 ml-1">
-              <button
-                onClick={toggleMute}
-                className="h-5 w-5 rounded-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                aria-label={isMuted ? "Unmute" : "Mute"}
-              >
-                {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-              </button>
-              {audioUrl && (
-                <button
-                  onClick={handleReplay}
-                  disabled={isPlaying && !audioRef.current?.paused}
-                  className="h-5 w-5 rounded-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  aria-label="Replay"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </button>
-              )}
-              {isFetchingAudio && (
-                <Loader2 className="h-3 w-3 text-muted-foreground animate-spin" />
-              )}
+          {!isSpeaking && !isFollowingUp && latest && (
+            <div className="flex items-center gap-1">
+              <span className={cn("h-2 w-2 rounded-full inline-block", sentimentDot)} />
+              <span className={cn("font-mono text-[9px] uppercase tracking-widest", sentimentLabel)}>
+                {latest.sentiment}
+              </span>
             </div>
+          )}
+          {/* Replay button — shown once TTS audio is available and persona is not speaking */}
+          {audioUrl && !isSpeaking && (
+            <button
+              onClick={() => onReplayRequest(persona.id)}
+              className="h-5 w-5 rounded-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors ml-1"
+              aria-label={`Replay ${persona.name}`}
+              title="Replay voice"
+            >
+              <Volume2 className="h-3 w-3" />
+            </button>
           )}
         </div>
       </div>
 
       {/* Reaction content */}
-      <div className="min-h-[60px] flex items-start">
-        {isLoading && !reaction && (
+      <div className="min-h-[60px] flex flex-col gap-2">
+        {isThinking && !reaction && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
             <span className="font-mono text-[10px] tracking-wider">THINKING...</span>
@@ -290,20 +234,26 @@ function PersonaReactionCard({
         {reaction && (
           <p className="text-sm text-foreground leading-relaxed">{reaction.content}</p>
         )}
-        {!isLoading && !reaction && (
+        {!isThinking && !reaction && (
           <p className="font-mono text-[10px] text-muted-foreground/50 tracking-wider self-center w-full text-center">
             AWAITING STIMULUS
           </p>
         )}
-      </div>
 
-      {/* Hidden audio element */}
-      <audio
-        ref={audioRef}
-        onEnded={() => setIsPlaying(false)}
-        onPause={() => setIsPlaying(false)}
-        className="hidden"
-      />
+        {/* Follow-up content */}
+        {isFollowingUp && !followUp && (
+          <div className="flex items-center gap-2 text-neon-cyan/70 pt-1 border-t border-border">
+            <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />
+            <span className="font-mono text-[10px] tracking-wider">ADDING FOLLOW-UP...</span>
+          </div>
+        )}
+        {followUp && (
+          <div className="pt-2 border-t border-border/60 space-y-1">
+            <span className="font-mono text-[9px] text-muted-foreground/50 tracking-widest">↩ FOLLOW-UP</span>
+            <p className="text-sm text-foreground leading-relaxed">{followUp.content}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -313,23 +263,15 @@ function PersonaReactionCard({
 async function processFile(file: File): Promise<MediaAttachment | null> {
   const type = file.type;
 
-  // Images
   if (type.startsWith("image/")) {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () =>
-        resolve({
-          type: "image",
-          name: file.name,
-          dataUrl: reader.result as string,
-          extractedText: null,
-          mimeType: type,
-        });
+        resolve({ type: "image", name: file.name, dataUrl: reader.result as string, extractedText: null, mimeType: type });
       reader.readAsDataURL(file);
     });
   }
 
-  // PDFs — send to /api/parse-pdf, no thumbnail
   if (type === "application/pdf") {
     const formData = new FormData();
     formData.append("file", file);
@@ -337,19 +279,10 @@ async function processFile(file: File): Promise<MediaAttachment | null> {
       const res = await fetch("/api/parse-pdf", { method: "POST", body: formData });
       if (!res.ok) return null;
       const { text } = (await res.json()) as { text: string };
-      return {
-        type: "pdf",
-        name: file.name,
-        dataUrl: null,
-        extractedText: text,
-        mimeType: type,
-      };
-    } catch {
-      return null;
-    }
+      return { type: "pdf", name: file.name, dataUrl: null, extractedText: text, mimeType: type };
+    } catch { return null; }
   }
 
-  // Videos — extract first frame via canvas
   if (type.startsWith("video/")) {
     return new Promise((resolve) => {
       const video = document.createElement("video");
@@ -362,26 +295,13 @@ async function processFile(file: File): Promise<MediaAttachment | null> {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          URL.revokeObjectURL(objectUrl);
-          resolve(null);
-          return;
-        }
+        if (!ctx) { URL.revokeObjectURL(objectUrl); resolve(null); return; }
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
         URL.revokeObjectURL(objectUrl);
-        resolve({
-          type: "video",
-          name: file.name,
-          dataUrl,
-          extractedText: null,
-          mimeType: type,
-        });
+        resolve({ type: "video", name: file.name, dataUrl, extractedText: null, mimeType: type });
       };
-      video.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(null);
-      };
+      video.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); };
     });
   }
 
@@ -397,35 +317,133 @@ interface FocusGroupPanelProps {
 }
 
 export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }: FocusGroupPanelProps) {
-  const [reactions, setReactions] = useState<Map<string, PanelReaction>>(new Map());
-  const [loadingPersonaIds, setLoadingPersonaIds] = useState<Set<string>>(new Set());
-  const [media, setMedia] = useState<MediaAttachment | null>(null);
-  const [input, setInput] = useState("");
-  const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
-  const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // ── Core state ──────────────────────────────────────────────────────────────
+  const [reactions, setReactions]               = useState<Map<string, PanelReaction>>(new Map());
+  const [thinkingPersonaId, setThinkingPersonaId] = useState<string | null>(null);
+  const [media, setMedia]                       = useState<MediaAttachment | null>(null);
+  const [input, setInput]                       = useState("");
+  const [urlInput, setUrlInput]                 = useState("");
+  const [isFetchingUrl, setIsFetchingUrl]       = useState(false);
+  const [sessionId, setSessionId]               = useState<string | null>(initialSessionId);
+  const [isRunning, setIsRunning]               = useState(false);
+  const [error, setError]                       = useState<string | null>(null);
   const [isProcessingMedia, setIsProcessingMedia] = useState(false);
-  const [roundCount, setRoundCount] = useState(0);
-  const [analytics, setAnalytics] = useState<FocusGroupAnalytics | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [roundCount, setRoundCount]             = useState(0);
+  const [analytics, setAnalytics]               = useState<FocusGroupAnalytics | null>(null);
+  const [analyzing, setAnalyzing]               = useState(false);
 
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ── Follow-up state ──────────────────────────────────────────────────────────
+  // personaId → hint text for personas that have something to add
+  const [pendingFollowUps, setPendingFollowUps] = useState<Map<string, string>>(new Map());
+  // personaId → completed follow-up reaction
+  const [followUps, setFollowUps]               = useState<Map<string, PanelReaction>>(new Map());
+  // personaId of the follow-up currently being generated
+  const [followUpLoadingId, setFollowUpLoadingId] = useState<string | null>(null);
 
-  const {
-    isListening,
-    isSupported: voiceSupported,
-    transcript,
-    start: startListening,
-    stop: stopListening,
-  } = useVoiceInput({
-    onResult: (text) => setInput(text),
-  });
+  // ── Audio queue state ────────────────────────────────────────────────────────
+  // Stored audio URLs per persona (for replay)
+  const [audioUrls, setAudioUrls]               = useState<Map<string, string>>(new Map());
+  // Which persona is currently playing audio
+  const [currentSpeakerId, setCurrentSpeakerId] = useState<string | null>(null);
+  // Global mute
+  const [isMuted, setIsMuted]                   = useState(false);
 
-  // When transcription comes in, fill it into input
+  // Audio queue and single shared <audio> element
+  const audioRef      = useRef<HTMLAudioElement | null>(null);
+  const audioQueueRef = useRef<Array<{ personaId: string; url: string }>>([]);
+  // Track whether the queue processor is running so we don't start it twice
+  const processingRef = useRef(false);
+
+  // ── Refs ─────────────────────────────────────────────────────────────────────
+  const inputRef    = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef= useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const isMutedRef  = useRef(isMuted);
+
+  // Keep isMutedRef in sync
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+  // ── Voice input ──────────────────────────────────────────────────────────────
+  const { isListening, isSupported: voiceSupported, transcript, start: startListening, stop: stopListening } =
+    useVoiceInput({ onResult: (text) => setInput(text) });
+
+  useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
+
+  // ── Audio queue processor ────────────────────────────────────────────────────
+
+  const playNext = useCallback(() => {
+    const next = audioQueueRef.current.shift();
+    if (!next) {
+      setCurrentSpeakerId(null);
+      processingRef.current = false;
+      return;
+    }
+    setCurrentSpeakerId(next.personaId);
+
+    if (!audioRef.current) { playNext(); return; }
+
+    audioRef.current.muted  = isMutedRef.current;
+    audioRef.current.src    = next.url;
+    audioRef.current.play().catch(() => playNext());
+  }, []);
+
+  const enqueueAudio = useCallback((personaId: string, url: string) => {
+    audioQueueRef.current.push({ personaId, url });
+    if (!processingRef.current) {
+      processingRef.current = true;
+      playNext();
+    }
+  }, [playNext]);
+
+  // Mute/unmute the currently playing audio without stopping it
   useEffect(() => {
-    if (transcript) setInput(transcript);
-  }, [transcript]);
+    if (audioRef.current) audioRef.current.muted = isMuted;
+  }, [isMuted]);
+
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      audioUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── TTS fetch and enqueue ────────────────────────────────────────────────────
+
+  const fetchAndEnqueueTTS = useCallback(async (reaction: PanelReaction, ttsVoice: string) => {
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: reaction.content, voice: ttsVoice }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+
+      setAudioUrls((prev) => new Map(prev).set(reaction.personaId, url));
+      enqueueAudio(reaction.personaId, url);
+    } catch {
+      // TTS failure is non-fatal — the panel still works without audio
+    }
+  }, [enqueueAudio]);
+
+  // ── Replay a persona's audio ─────────────────────────────────────────────────
+
+  const handleReplayRequest = useCallback((personaId: string) => {
+    const url = audioUrls.get(personaId);
+    if (!url) return;
+    // Interrupt current playback, push this one to the front
+    audioQueueRef.current.unshift({ personaId, url });
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    processingRef.current = true;
+    playNext();
+  }, [audioUrls, playNext]);
+
+  // ── Media file handling ──────────────────────────────────────────────────────
 
   const handleFileSelect = useCallback(async (file: File) => {
     setIsProcessingMedia(true);
@@ -435,37 +453,57 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
       if (result) {
         setMedia(result);
       } else {
-        setError("Unsupported file type or processing failed. Try PNG, JPG, PDF, or MP4.");
+        setError("Unsupported file type. Try PNG, JPG, PDF, or MP4.");
       }
     } finally {
       setIsProcessingMedia(false);
     }
   }, []);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (file) handleFileSelect(file);
-    },
-    [handleFileSelect]
-  );
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
 
-  const handlePaste = useCallback(
-    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const item = Array.from(e.clipboardData.items).find((i) =>
-        i.type.startsWith("image/")
-      );
-      if (item) {
-        const file = item.getAsFile();
-        if (file) {
-          e.preventDefault();
-          handleFileSelect(file);
-        }
-      }
-    },
-    [handleFileSelect]
-  );
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
+    if (item) {
+      const file = item.getAsFile();
+      if (file) { e.preventDefault(); handleFileSelect(file); }
+    }
+  }, [handleFileSelect]);
+
+  // ── URL fetch ────────────────────────────────────────────────────────────────
+
+  async function fetchUrl() {
+    const url = urlInput.trim();
+    if (!url || isFetchingUrl) return;
+    setIsFetchingUrl(true);
+    setError(null);
+    try {
+      const res  = await fetch("/api/scrape-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError((data as { error?: string }).error ?? "Could not fetch URL"); return; }
+      setMedia(data as MediaAttachment);
+      setUrlInput("");
+    } catch {
+      setError("Network error — could not fetch URL");
+    } finally {
+      setIsFetchingUrl(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  function handleUrlKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") { e.preventDefault(); fetchUrl(); }
+  }
+
+  // ── Panel run ────────────────────────────────────────────────────────────────
 
   async function runPanel() {
     const text = input.trim();
@@ -475,19 +513,22 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     setError(null);
     setIsRunning(true);
     setReactions(new Map());
-    setLoadingPersonaIds(new Set(personas.map((p) => p.id)));
+    setThinkingPersonaId(null);
+    setCurrentSpeakerId(null);
+    // Clear audio queue and per-persona URLs
+    audioQueueRef.current = [];
+    processingRef.current = false;
+    setAudioUrls(new Map());
+    // Clear follow-up state for the new round
+    setPendingFollowUps(new Map());
+    setFollowUps(new Map());
+    setFollowUpLoadingId(null);
 
     try {
       const res = await fetch("/api/focus-group/panel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId,
-          jobId,
-          personas,
-          stimulus: text || undefined,
-          media: media || undefined,
-        }),
+        body: JSON.stringify({ sessionId, jobId, personas, stimulus: text || undefined, media: media || undefined }),
       });
 
       if (!res.ok || !res.body) {
@@ -495,9 +536,9 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
         throw new Error((data as { error?: string }).error ?? "Panel request failed");
       }
 
-      const reader = res.body.getReader();
+      const reader  = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
+      let buffer    = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -505,7 +546,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
+        buffer      = lines.pop() ?? "";
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
@@ -517,21 +558,23 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
             }
 
             if (event.type === "persona_reaction_start") {
-              setLoadingPersonaIds((prev) => {
-                const next = new Set(prev);
-                next.add(event.personaId);
-                return next;
-              });
+              setThinkingPersonaId(event.personaId);
             }
 
             if (event.type === "persona_reaction_complete") {
               const reaction = event.reaction as PanelReaction;
+              setThinkingPersonaId(null);
               setReactions((prev) => new Map(prev).set(reaction.personaId, reaction));
-              setLoadingPersonaIds((prev) => {
-                const next = new Set(prev);
-                next.delete(reaction.personaId);
-                return next;
-              });
+
+              // Collect follow-up hints for the post-round UI
+              if (reaction.followUpHint) {
+                setPendingFollowUps((prev) => new Map(prev).set(reaction.personaId, reaction.followUpHint!));
+              }
+
+              // Find this persona's TTS voice and pre-fetch audio
+              const personaIndex = personas.findIndex((p) => p.id === reaction.personaId);
+              const ttsVoice     = TTS_VOICES[personaIndex % TTS_VOICES.length];
+              fetchAndEnqueueTTS(reaction, ttsVoice);
             }
 
             if (event.type === "round_complete") {
@@ -550,34 +593,30 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — please try again");
     } finally {
-      setLoadingPersonaIds(new Set());
+      setThinkingPersonaId(null);
       setIsRunning(false);
       inputRef.current?.focus();
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      runPanel();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runPanel(); }
   }
+
+  // ── Analytics ────────────────────────────────────────────────────────────────
 
   async function runAnalysis() {
     if (!sessionId || analyzing) return;
     setAnalyzing(true);
     setError(null);
     try {
-      const res = await fetch("/api/focus-group/analyze", {
+      const res  = await fetch("/api/focus-group/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError((data as { error?: string }).error ?? "Analysis failed");
-        return;
-      }
+      if (!res.ok) { setError((data as { error?: string }).error ?? "Analysis failed"); return; }
       setAnalytics(data as FocusGroupAnalytics);
     } catch {
       setError("Network error during analysis");
@@ -586,42 +625,177 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     }
   }
 
+  // ── Follow-up trigger ────────────────────────────────────────────────────────
+
+  async function triggerFollowUp(personaId: string) {
+    const hint = pendingFollowUps.get(personaId);
+    if (!hint || followUpLoadingId !== null) return;
+
+    // Remove from pending immediately so the chip disappears
+    setPendingFollowUps((prev) => {
+      const next = new Map(prev);
+      next.delete(personaId);
+      return next;
+    });
+
+    setFollowUpLoadingId(personaId);
+    setError(null);
+
+    try {
+      const allReactions = [...Array.from(reactions.values()), ...Array.from(followUps.values())];
+      const res = await fetch("/api/focus-group/panel/followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          jobId,
+          personaId,
+          personas,
+          stimulus: input.trim() || undefined,
+          media: media || undefined,
+          allReactions,
+          hint,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error ?? "Follow-up failed");
+      }
+
+      const followUp = data as PanelReaction;
+      setFollowUps((prev) => new Map(prev).set(personaId, followUp));
+
+      // Enqueue TTS for the follow-up
+      const personaIndex = personas.findIndex((p) => p.id === personaId);
+      const ttsVoice     = TTS_VOICES[personaIndex % TTS_VOICES.length];
+      await fetchAndEnqueueTTS(followUp, ttsVoice);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Follow-up failed");
+    } finally {
+      setFollowUpLoadingId(null);
+    }
+  }
+
   const hasReactions = reactions.size > 0;
+
+  // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
+      {/* Hidden shared audio element */}
+      <audio
+        ref={audioRef}
+        onEnded={playNext}
+        onPause={() => { if (audioRef.current?.ended) setCurrentSpeakerId(null); }}
+        className="hidden"
+      />
+
       {/* Explainer */}
       <div className="terminal-card border-border">
         <p className="text-muted-foreground text-sm leading-relaxed font-mono">
-          Upload a{" "}
-          <span className="text-neon-purple font-bold">landing page, ad, deck, or video</span>{" "}
-          and get instant live reactions from all personas at once — like a real research panel.
-          Speak your question or type it. Each persona reacts in parallel with their own voice.
+          Paste a{" "}
+          <span className="text-neon-cyan font-bold">URL</span>
+          {", upload a "}
+          <span className="text-neon-purple font-bold">landing page, ad, deck, or video</span>
+          {" — personas react one at a time, hear each other, and respond like they're on a group call together."}
         </p>
       </div>
 
+      {/* Mute toggle + speaking indicator */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 h-6">
+          {currentSpeakerId && (
+            <div className="flex items-center gap-1.5 text-neon-cyan">
+              <Radio className="h-3 w-3 animate-pulse" />
+              <span className="font-mono text-[10px] tracking-widest">
+                {personas.find((p) => p.id === currentSpeakerId)?.name?.toUpperCase() ?? "SOMEONE"} IS SPEAKING
+              </span>
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => setIsMuted((m) => !m)}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-sm border font-mono text-[10px] font-bold tracking-wider transition-all",
+            isMuted
+              ? "border-neon-pink/40 text-neon-pink bg-neon-pink/5"
+              : "border-border text-muted-foreground hover:border-border hover:text-foreground"
+          )}
+          aria-label={isMuted ? "Unmute" : "Mute all"}
+        >
+          {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+          {isMuted ? "MUTED" : "VOICES ON"}
+        </button>
+      </div>
+
       {/* Persona grid */}
-      <div
-        className={cn(
-          "grid gap-3",
-          personas.length <= 2
-            ? "grid-cols-1 sm:grid-cols-2"
-            : personas.length === 3
-            ? "grid-cols-1 sm:grid-cols-3"
-            : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-        )}
-      >
+      <div className={cn(
+        "grid gap-3",
+        personas.length <= 2   ? "grid-cols-1 sm:grid-cols-2" :
+        personas.length === 3  ? "grid-cols-1 sm:grid-cols-3" :
+                                 "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      )}>
         {personas.map((persona, i) => (
           <PersonaReactionCard
             key={persona.id}
             persona={persona}
             personaIndex={i}
             reaction={reactions.get(persona.id) ?? null}
-            isLoading={loadingPersonaIds.has(persona.id)}
-            ttsVoice={TTS_VOICES[i % TTS_VOICES.length]}
+            followUp={followUps.get(persona.id) ?? null}
+            isThinking={thinkingPersonaId === persona.id}
+            isSpeaking={currentSpeakerId === persona.id}
+            isFollowingUp={followUpLoadingId === persona.id}
+            audioUrl={audioUrls.get(persona.id) ?? null}
+            onReplayRequest={handleReplayRequest}
           />
         ))}
       </div>
+
+      {/* Follow-up chips — shown after the round completes if any persona has more to say */}
+      {pendingFollowUps.size > 0 && !isRunning && (
+        <div className="space-y-2">
+          <p className="font-mono text-[9px] text-muted-foreground/50 tracking-widest uppercase">
+            Wants to respond
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {Array.from(pendingFollowUps.entries()).map(([pid, hint]) => {
+              const pIdx    = personas.findIndex((p) => p.id === pid);
+              const persona = personas[pIdx];
+              if (!persona) return null;
+              const color   = AVATAR_COLORS[pIdx % AVATAR_COLORS.length];
+              const loading = followUpLoadingId === pid;
+              return (
+                <button
+                  key={pid}
+                  onClick={() => triggerFollowUp(pid)}
+                  disabled={followUpLoadingId !== null}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-sm border font-mono text-xs transition-all",
+                    followUpLoadingId !== null
+                      ? "border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                      : "border-neon-cyan/30 text-foreground hover:border-neon-cyan/60 hover:bg-neon-cyan/5 cursor-pointer"
+                  )}
+                >
+                  {loading ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-neon-cyan flex-shrink-0" />
+                  ) : (
+                    <div className={cn(
+                      "h-4 w-4 rounded-[2px] flex items-center justify-center text-primary-foreground font-mono text-[8px] font-bold flex-shrink-0",
+                      color,
+                    )}>
+                      {getInitials(persona.name)}
+                    </div>
+                  )}
+                  <span className="font-bold">{persona.name}</span>
+                  <MessageSquarePlus className="h-3 w-3 text-neon-cyan flex-shrink-0" />
+                  <span className="text-muted-foreground truncate max-w-[180px]">{hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="border border-border rounded-sm overflow-hidden">
@@ -632,12 +806,42 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           </div>
         )}
 
-        {/* Drop zone hint when no media */}
+        {/* URL input row — visible when no media attached */}
+        {!media && (
+          <div className="p-3 border-b border-border bg-secondary/5 flex gap-2 items-center">
+            <Link className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+            <input
+              ref={urlInputRef}
+              type="url"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={handleUrlKeyDown}
+              placeholder="Paste a URL — website, landing page, or YouTube video..."
+              disabled={isFetchingUrl || isRunning}
+              className="flex-1 bg-transparent font-mono text-xs text-foreground placeholder-muted-foreground/60 focus:outline-none"
+            />
+            <button
+              onClick={fetchUrl}
+              disabled={!urlInput.trim() || isFetchingUrl || isRunning}
+              className={cn(
+                "flex-shrink-0 h-7 px-2.5 rounded-sm font-mono text-[10px] font-bold tracking-wider border transition-all",
+                urlInput.trim() && !isFetchingUrl && !isRunning
+                  ? "border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10"
+                  : "border-border text-muted-foreground opacity-50 cursor-not-allowed"
+              )}
+              aria-label="Fetch URL"
+            >
+              {isFetchingUrl ? <Loader2 className="h-3 w-3 animate-spin" /> : "FETCH"}
+            </button>
+          </div>
+        )}
+
+        {/* Drop zone hint */}
         {!media && (
           <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
-            className="p-3 border-b border-border border-dashed bg-secondary/10 text-center transition-colors hover:bg-secondary/20"
+            className="px-3 py-2 border-b border-border border-dashed bg-secondary/10 text-center transition-colors hover:bg-secondary/20"
           >
             {isProcessingMedia ? (
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -664,11 +868,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
             )}
             aria-label="Upload file"
           >
-            {isProcessingMedia ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-3.5 w-3.5" />
-            )}
+            {isProcessingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
           </button>
 
           <input
@@ -713,7 +913,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
                 ? "Listening... speak your question"
                 : media
                 ? "Add context about this material, or just hit send..."
-                : "Describe a landing page, paste a headline, or ask a question..."
+                : "Ask a question, describe something, or add context..."
             }
             rows={1}
             className="flex-1 bg-transparent font-mono text-sm text-foreground placeholder-muted-foreground resize-none focus:outline-none leading-relaxed py-1 px-1 min-h-[32px] max-h-28"
@@ -725,16 +925,10 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           <button
             onClick={runPanel}
             disabled={(!input.trim() && !media) || isRunning}
-            className={cn(
-              "flex-shrink-0 h-9 w-9 rounded-sm disabled:bg-secondary disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all bg-neon-purple hover:opacity-90"
-            )}
+            className="flex-shrink-0 h-9 w-9 rounded-sm disabled:bg-secondary disabled:text-muted-foreground text-primary-foreground flex items-center justify-center transition-all bg-neon-purple hover:opacity-90"
             aria-label="Send to panel"
           >
-            {isRunning ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-3.5 w-3.5" />
-            )}
+            {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
@@ -770,38 +964,25 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
               )}
             >
               {analyzing ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" /> ANALYZING...
-                </>
+                <><Loader2 className="h-3 w-3 animate-spin" /> ANALYZING...</>
               ) : (
-                <>
-                  <BarChart3 className="h-3 w-3" /> GENERATE REPORT
-                </>
+                <><BarChart3 className="h-3 w-3" /> GENERATE REPORT</>
               )}
             </button>
           )}
         </div>
       )}
 
-      {/* Analytics dashboard */}
       {analytics && (
         <FocusGroupAnalyticsDashboard analytics={analytics} personas={personas} />
       )}
 
-      {/* Media type icons legend */}
+      {/* Legend */}
       <div className="flex items-center gap-4 text-muted-foreground/40">
-        <div className="flex items-center gap-1">
-          <ImageIcon className="h-3 w-3" />
-          <span className="font-mono text-[9px]">IMAGES</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <FileText className="h-3 w-3" />
-          <span className="font-mono text-[9px]">PDF DECKS</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Video className="h-3 w-3" />
-          <span className="font-mono text-[9px]">VIDEOS</span>
-        </div>
+        <div className="flex items-center gap-1"><Globe className="h-3 w-3" /><span className="font-mono text-[9px]">URLS</span></div>
+        <div className="flex items-center gap-1"><ImageIcon className="h-3 w-3" /><span className="font-mono text-[9px]">IMAGES</span></div>
+        <div className="flex items-center gap-1"><FileText className="h-3 w-3" /><span className="font-mono text-[9px]">PDF DECKS</span></div>
+        <div className="flex items-center gap-1"><Video className="h-3 w-3" /><span className="font-mono text-[9px]">VIDEOS</span></div>
       </div>
     </div>
   );

@@ -468,29 +468,33 @@ export interface FocusGroupMessage {
   timestamp: string;
   /** URL or base64 data URI of media that was shared in this message (panel mode). */
   mediaDataUrl?: string;
-  mediaType?: "image" | "pdf" | "video";
+  mediaType?: "image" | "pdf" | "video" | "url";
 }
 
 /**
- * A piece of visual/audio material the user uploads in Panel mode.
- * Images are stored as base64 data URIs; PDFs are represented by
- * their extracted text plus an optional thumbnail.
+ * A piece of visual/audio material the user uploads or links in Panel mode.
+ * - images/video-frames: stored as base64 data URIs
+ * - PDFs: represented by extracted text + null dataUrl
+ * - urls: scraped web/YouTube content stored as extracted text + null dataUrl
  */
 export interface MediaAttachment {
-  type: "image" | "pdf" | "video";
-  /** Display name (original filename). */
+  type: "image" | "pdf" | "video" | "url";
+  /** Display name: original filename or page title for URLs. */
   name: string;
-  /** Base64 data URI for images/video-frames; null for PDFs. */
+  /** Base64 data URI for images/video-frames; null for PDFs and URLs. */
   dataUrl: string | null;
-  /** Extracted text content for PDFs; null for images. */
+  /** Extracted text content for PDFs and URLs; null for images. */
   extractedText: string | null;
-  /** MIME type of the original file, e.g. "image/png", "application/pdf". */
+  /** MIME type of the original file, e.g. "image/png", "application/pdf", "text/html". */
   mimeType: string;
+  /** Original URL, present when type is "url". */
+  sourceUrl?: string;
 }
 
 /**
- * A single persona's reaction in Panel mode (parallel, not sequential).
- * Includes an optional sentiment for coloured card borders.
+ * A single persona's reaction in Panel mode.
+ * Includes optional follow-up hint: a brief phrase the persona wants to add
+ * after hearing everyone else's initial reactions.
  */
 export interface PanelReaction {
   personaId: string;
@@ -499,6 +503,12 @@ export interface PanelReaction {
   /** Derived by the AI from the reaction text. */
   sentiment: "positive" | "neutral" | "skeptical" | "negative";
   timestamp: string;
+  /**
+   * If the persona has a specific point to make in response to another
+   * participant's comment, a brief (≤10 word) phrase describing it.
+   * Null / absent means no follow-up is available.
+   */
+  followUpHint?: string | null;
 }
 
 /** Shape of a POST body to /api/focus-group/panel */
@@ -510,6 +520,21 @@ export interface PanelRoundRequest {
   stimulus?: string;
   /** The media the personas are reacting to. */
   media?: MediaAttachment;
+}
+
+/** Shape of a POST body to /api/focus-group/panel/followup */
+export interface PanelFollowUpRequest {
+  sessionId?: string;
+  jobId: string;
+  /** The persona generating the follow-up. */
+  personaId: string;
+  personas: Persona[];
+  stimulus?: string;
+  media?: MediaAttachment;
+  /** All reactions (initial + any prior follow-ups) already visible in the thread. */
+  allReactions: PanelReaction[];
+  /** The hint the persona indicated it wanted to add. */
+  hint: string;
 }
 
 export interface FocusGroupSession {

@@ -1,10 +1,10 @@
 /**
  * FitCheck — Panel Mode AI Orchestration
  *
- * Panel mode differs from focus-group chat in two key ways:
- *  1. All personas react in parallel (Promise.allSettled) rather than sequentially.
- *  2. Personas can "see" uploaded media (images, video frames, PDF text) via
- *     multimodal content parts in the Vercel AI SDK.
+ * Panel mode runs personas SEQUENTIALLY so each participant can hear what
+ * the previous ones said, making the conversation genuinely emergent.
+ * Personas also "see" uploaded media (images, video frames, PDF text, URLs)
+ * via multimodal content parts in the Vercel AI SDK.
  */
 
 import { generateText } from 'ai';
@@ -42,24 +42,66 @@ function getChatModel() {
 
 // ─── Prompt builder ───────────────────────────────────────────────────────────
 
-function buildPanelPrompt(persona: Persona, allPersonas: Persona[]): string {
+function buildPanelPrompt(
+  persona: Persona,
+  allPersonas: Persona[],
+  speakingPosition: number,
+): string {
+  const context = buildPersonaContext(persona, allPersonas);
+  const isFirst = speakingPosition === 0;
+
+  const turnInstruction = isFirst
+    ? `You are the first to react. Give your immediate, unfiltered first impression.`
+    : `The other participants have already weighed in — read what they said, then give your own take. ` +
+      `You can agree, push back, or add a new angle. Don't just echo others.`;
+
+  const followUpInstruction = !isFirst
+    ? `
+- If one of the other participants said something you'd strongly push back on, correct, or build on,
+  add this tag on its own line AFTER the sentiment tag:
+  [FOLLOW_UP: a brief phrase (≤10 words) naming exactly what you'd want to add]
+  Only include this when you feel genuinely compelled to respond. Omit it entirely otherwise.`
+    : '';
+
+  return `${context}
+
+## Your role right now
+You're on a live video call with the founder and other research panel members. They've just shared something and asked for reactions. You're speaking out loud, so keep it natural and conversational.
+
+${turnInstruction}
+
+Guidelines:
+- If you can see an image or video frame, lead with what stands out visually.
+- Be specific — reference the actual copy, design, claim, or detail you're reacting to.
+- Express genuine emotion that fits your worldview: excitement, skepticism, confusion, delight.
+- 2–3 sentences max. Speak like you're talking, not writing a review.
+- After your reaction, add a sentiment tag on its own line:
+  [SENTIMENT: positive|neutral|skeptical|negative]${followUpInstruction}
+
+Stay fully in character as ${persona.name}. Do not mention being an AI.`;
+}
+
+function buildFollowUpPrompt(
+  persona: Persona,
+  allPersonas: Persona[],
+  hint: string,
+): string {
   const context = buildPersonaContext(persona, allPersonas);
 
   return `${context}
 
 ## Your role right now
-You are in a live research panel. The founder has just shared a piece of marketing material or
-asked a question. Give your immediate, authentic first impression as ${persona.name}.
+You're on a live video call. The full group has already given their initial reactions. You indicated you had something specific to add: "${hint}".
+
+Now it's your turn. Address whoever you're responding to by name if it's clear. Speak naturally, as if picking up a thread of conversation.
 
 Guidelines:
-- React to what you actually see or hear — be specific about the visual, copy, or claim.
-- If an image is provided, comment on what stands out visually before anything else.
-- Express genuine emotion: excitement, confusion, skepticism, curiosity — whatever fits your worldview.
-- Keep it 2–4 sentences. No preamble, no "As someone who…" openers — just react.
-- After your reaction, end your response with a sentiment tag on its own line in this exact format:
+- 2–3 sentences max.
+- Be direct — you're following up on a specific point, not rehashing your entire view.
+- After your follow-up, add a sentiment tag on its own line:
   [SENTIMENT: positive|neutral|skeptical|negative]
 
-Stay in character. Do not break the fourth wall or reveal you are an AI.`;
+Stay fully in character as ${persona.name}. Do not mention being an AI.`;
 }
 
 // ─── Content part builder ─────────────────────────────────────────────────────
@@ -68,23 +110,23 @@ type ContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; image: string; mimeType: string };
 
-function buildUserContent(stimulus: string | undefined, media: MediaAttachment | undefined): ContentPart[] {
+function buildUserContent(
+  stimulus: string | undefined,
+  media: MediaAttachment | undefined,
+  priorReactions: PanelReaction[],
+): ContentPart[] {
   const parts: ContentPart[] = [];
 
+  // --- Media ---
   if (media) {
     if ((media.type === 'image' || media.type === 'video') && media.dataUrl) {
-      // Strip the "data:<mime>;base64," prefix to get raw base64
       const base64Match = media.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (base64Match) {
-        parts.push({
-          type: 'image',
-          image: base64Match[2],
-          mimeType: base64Match[1],
-        });
+        parts.push({ type: 'image', image: base64Match[2], mimeType: base64Match[1] });
         if (media.type === 'video') {
           parts.push({
             type: 'text',
-            text: `[This is a still frame extracted from the video "${media.name}"]`,
+            text: `[Still frame from video: "${media.name}"]`,
           });
         }
       }
@@ -93,38 +135,61 @@ function buildUserContent(stimulus: string | undefined, media: MediaAttachment |
     if (media.type === 'pdf' && media.extractedText) {
       parts.push({
         type: 'text',
-        text: `[PDF document: "${media.name}"]\n\n${media.extractedText.slice(0, 8000)}`,
+        text: `[PDF: "${media.name}"]\n\n${media.extractedText.slice(0, 8000)}`,
+      });
+    }
+
+    if (media.type === 'url' && media.extractedText) {
+      const src = media.sourceUrl ? ` — ${media.sourceUrl}` : '';
+      parts.push({
+        type: 'text',
+        text: `[Web page: "${media.name}"${src}]\n\n${media.extractedText.slice(0, 8000)}`,
       });
     }
   }
 
+  // --- Founder's question/context ---
   if (stimulus) {
+    parts.push({ type: 'text', text: stimulus });
+  }
+
+  // --- What the previous participants said ---
+  if (priorReactions.length > 0) {
+    const transcript = priorReactions
+      .map((r) => `${r.personaName.toUpperCase()}: ${r.content}`)
+      .join('\n\n');
     parts.push({
       type: 'text',
-      text: stimulus,
+      text: `What the others said before you:\n\n${transcript}`,
     });
   }
 
   if (parts.length === 0) {
-    parts.push({
-      type: 'text',
-      text: 'Please give your overall first impression of this product.',
-    });
+    parts.push({ type: 'text', text: 'Give your honest first impression of this product.' });
   }
 
   return parts;
 }
 
-// ─── Sentiment extractor ──────────────────────────────────────────────────────
+// ─── Tag extractors ───────────────────────────────────────────────────────────
 
-function extractSentiment(text: string): {
+function extractReactionMeta(text: string): {
   content: string;
   sentiment: PanelReaction['sentiment'];
+  followUpHint: string | null;
 } {
-  const match = text.match(/\[SENTIMENT:\s*(positive|neutral|skeptical|negative)\]/i);
-  const sentiment = (match?.[1]?.toLowerCase() ?? 'neutral') as PanelReaction['sentiment'];
-  const content = text.replace(/\[SENTIMENT:[^\]]*\]/gi, '').trim();
-  return { content, sentiment };
+  const sentimentMatch = text.match(/\[SENTIMENT:\s*(positive|neutral|skeptical|negative)\]/i);
+  const sentiment = (sentimentMatch?.[1]?.toLowerCase() ?? 'neutral') as PanelReaction['sentiment'];
+
+  const followUpMatch = text.match(/\[FOLLOW_UP:\s*([^\]]+)\]/i);
+  const followUpHint = followUpMatch ? followUpMatch[1].trim() : null;
+
+  const content = text
+    .replace(/\[SENTIMENT:[^\]]*\]/gi, '')
+    .replace(/\[FOLLOW_UP:[^\]]*\]/gi, '')
+    .trim();
+
+  return { content, sentiment, followUpHint };
 }
 
 // ─── Single persona panel reaction ───────────────────────────────────────────
@@ -133,12 +198,13 @@ export async function generatePersonaPanelReaction(
   persona: Persona,
   allPersonas: Persona[],
   stimulus: string | undefined,
-  media: MediaAttachment | undefined
+  media: MediaAttachment | undefined,
+  priorReactions: PanelReaction[],
+  speakingPosition: number,
 ): Promise<PanelReaction> {
-  const systemPrompt = buildPanelPrompt(persona, allPersonas);
-  const contentParts = buildUserContent(stimulus, media);
+  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition);
+  const contentParts = buildUserContent(stimulus, media, priorReactions);
 
-  // Build messages array — use multimodal parts when image is present
   const hasImage = contentParts.some((p) => p.type === 'image');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,16 +213,11 @@ export async function generatePersonaPanelReaction(
   if (hasImage) {
     userMessage = {
       role: 'user' as const,
-      content: contentParts.map((part) => {
-        if (part.type === 'image') {
-          return {
-            type: 'image' as const,
-            image: part.image,
-            mimeType: part.mimeType,
-          };
-        }
-        return { type: 'text' as const, text: part.text };
-      }),
+      content: contentParts.map((part) =>
+        part.type === 'image'
+          ? { type: 'image' as const, image: part.image, mimeType: part.mimeType }
+          : { type: 'text' as const, text: part.text }
+      ),
     };
   } else {
     const textContent = contentParts
@@ -173,11 +234,74 @@ export async function generatePersonaPanelReaction(
     model: getChatModel() as any,
     system: systemPrompt,
     messages: [userMessage],
-    temperature: 0.8,
+    temperature: 0.85,
+    maxOutputTokens: 1024,
+  });
+
+  const { content, sentiment, followUpHint } = extractReactionMeta(result.text.trim());
+
+  return {
+    personaId: persona.id,
+    personaName: persona.name,
+    content,
+    sentiment,
+    followUpHint,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// ─── Follow-up reaction for a single persona ──────────────────────────────────
+
+export async function generatePersonaFollowUp(
+  persona: Persona,
+  allPersonas: Persona[],
+  stimulus: string | undefined,
+  media: MediaAttachment | undefined,
+  allReactions: PanelReaction[],
+  hint: string,
+): Promise<PanelReaction> {
+  const systemPrompt = buildFollowUpPrompt(persona, allPersonas, hint);
+
+  // Build the discussion transcript as context
+  const transcript = allReactions
+    .map((r) => `${r.personaName.toUpperCase()}: ${r.content}`)
+    .join('\n\n');
+
+  const contextParts = buildUserContent(stimulus, media, []);
+  const transcriptPart = { type: 'text' as const, text: `Discussion so far:\n\n${transcript}` };
+
+  const allParts = [...contextParts, transcriptPart];
+  const hasImage = allParts.some((p) => p.type === 'image');
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let userMessage: any;
+
+  if (hasImage) {
+    userMessage = {
+      role: 'user' as const,
+      content: allParts.map((part) =>
+        part.type === 'image'
+          ? { type: 'image' as const, image: (part as { type: 'image'; image: string; mimeType: string }).image, mimeType: (part as { type: 'image'; image: string; mimeType: string }).mimeType }
+          : { type: 'text' as const, text: (part as { type: 'text'; text: string }).text },
+      ),
+    };
+  } else {
+    const textContent = allParts
+      .filter((p) => p.type === 'text')
+      .map((p) => (p as { type: 'text'; text: string }).text)
+      .join('\n\n');
+    userMessage = { role: 'user' as const, content: textContent };
+  }
+
+  const result = await generateText({
+    model: getChatModel() as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    system: systemPrompt,
+    messages: [userMessage],
+    temperature: 0.85,
     maxOutputTokens: 512,
   });
 
-  const { content, sentiment } = extractSentiment(result.text.trim());
+  const { content, sentiment } = extractReactionMeta(result.text.trim());
 
   return {
     personaId: persona.id,
@@ -188,33 +312,43 @@ export async function generatePersonaPanelReaction(
   };
 }
 
-// ─── Parallel reaction runner ─────────────────────────────────────────────────
+// ─── Sequential reaction runner ───────────────────────────────────────────────
 
-export interface ParallelPanelResult {
+export interface PanelReactionResult {
   reaction: PanelReaction | null;
   error: string | null;
   personaId: string;
 }
 
 /**
- * Run all personas in parallel. Returns results in completion order.
- * Uses a callback so callers can stream each result as it arrives.
+ * Run all persona reactions SEQUENTIALLY so each participant hears what
+ * the previous ones said. The callback fires after each persona finishes,
+ * allowing the API route to stream results turn by turn.
  */
 export async function generateAllPanelReactions(
   personas: Persona[],
   stimulus: string | undefined,
   media: MediaAttachment | undefined,
-  onReactionComplete: (result: ParallelPanelResult) => void
+  onReactionComplete: (result: PanelReactionResult) => void,
 ): Promise<void> {
-  const tasks = personas.map(async (persona) => {
+  const accumulated: PanelReaction[] = [];
+
+  for (let i = 0; i < personas.length; i++) {
+    const persona = personas[i];
     try {
-      const reaction = await generatePersonaPanelReaction(persona, personas, stimulus, media);
+      const reaction = await generatePersonaPanelReaction(
+        persona,
+        personas,
+        stimulus,
+        media,
+        accumulated,
+        i,
+      );
+      accumulated.push(reaction);
       onReactionComplete({ reaction, error: null, personaId: persona.id });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       onReactionComplete({ reaction: null, error, personaId: persona.id });
     }
-  });
-
-  await Promise.allSettled(tasks);
+  }
 }

@@ -18,11 +18,12 @@ import type { BrandResonanceMap, ThemeHotspot } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Hex values used for SVG fills — CSS custom properties don't resolve inside SVG attributes
 const CATEGORY_COLOR: Record<ThemeHotspot["category"], string> = {
-  leverage: "var(--neon-green)",
-  fix: "var(--neon-pink)",
-  develop: "var(--neon-cyan)",
-  monitor: "hsl(var(--muted-foreground))",
+  leverage: "#00ff80",  // neon-green
+  fix:      "#ff4da6",  // neon-pink
+  develop:  "#00e5ff",  // neon-cyan
+  monitor:  "#6b7280",  // neutral gray
 };
 
 const CATEGORY_LABEL: Record<ThemeHotspot["category"], string> = {
@@ -478,15 +479,15 @@ export function ResonanceHotspot({ data }: ResonanceHotspotProps) {
                 strokeOpacity={0.7}
               />
 
-              {/* One Scatter per category to get distinct colors */}
+              {/* One Scatter per category — hex fills so SVG resolves them correctly */}
               {(["leverage", "fix", "develop", "monitor"] as const).map((cat) => (
                 <Scatter
                   key={cat}
                   data={byCategory(cat)}
                   fill={CATEGORY_COLOR[cat]}
-                  fillOpacity={0.75}
-                  stroke={CATEGORY_COLOR[cat]}
-                  strokeWidth={1}
+                  fillOpacity={0.85}
+                  stroke="#0a0a0a"
+                  strokeWidth={1.5}
                   onClick={(data) => handleBubbleClick(data)}
                   style={{ cursor: "pointer" }}
                 />
