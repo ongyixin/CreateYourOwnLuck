@@ -5,6 +5,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
 } from "react";
 import {
   Mic,
@@ -27,6 +28,7 @@ import {
   MessageSquarePlus,
   Repeat2,
   Square,
+  AtSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FocusGroupAnalytics, MediaAttachment, PanelReaction, Persona } from "@/lib/types";
@@ -166,6 +168,7 @@ function PersonaReactionCard({
   isThinking,
   isSpeaking,
   isFollowingUp,
+  isListening,
   audioUrl,
   onReplayRequest,
 }: {
@@ -176,6 +179,8 @@ function PersonaReactionCard({
   isThinking: boolean;
   isSpeaking: boolean;
   isFollowingUp: boolean;
+  /** True when another persona is being directly addressed this round — this persona hears but doesn't respond. */
+  isListening: boolean;
   audioUrl: string | null;
   onReplayRequest: (personaId: string) => void;
 }) {
@@ -191,7 +196,8 @@ function PersonaReactionCard({
       className={cn(
         "rounded-sm border-2 p-4 flex flex-col gap-3 transition-all duration-300",
         sentimentStyle,
-        isSpeaking && "ring-2 ring-neon-cyan/40 ring-offset-1 ring-offset-background"
+        isSpeaking && "ring-2 ring-neon-cyan/40 ring-offset-1 ring-offset-background",
+        isListening && !reaction && "opacity-50",
       )}
     >
       {/* Header */}
@@ -252,10 +258,16 @@ function PersonaReactionCard({
         {reaction && (
           <p className="text-sm text-foreground leading-relaxed">{reaction.content}</p>
         )}
-        {!isThinking && !reaction && (
+        {!isThinking && !reaction && !isListening && (
           <p className="font-mono text-[10px] text-muted-foreground/50 tracking-wider self-center w-full text-center">
             AWAITING STIMULUS
           </p>
+        )}
+        {!isThinking && !reaction && isListening && (
+          <div className="flex items-center justify-center gap-1.5 text-muted-foreground/50">
+            <Users className="h-3 w-3" />
+            <span className="font-mono text-[10px] tracking-wider">LISTENING IN</span>
+          </div>
         )}
 
         {/* Follow-up content */}
@@ -386,6 +398,32 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   // Track whether the queue processor is running so we don't start it twice
   const processingRef = useRef(false);
 
+  // ── @mention / targeting state ───────────────────────────────────────────────
+  // Non-null while user is typing an @word: the partial name after @
+  const [mentionQuery, setMentionQuery]           = useState<string | null>(null);
+  // Char index of the @ character in the input string
+  const [mentionStartIndex, setMentionStartIndex] = useState<number>(-1);
+  // Keyboard-navigated row index in the mention dropdown
+  const [mentionSelectedIndex, setMentionSelectedIndex] = useState<number>(0);
+  // Persona ID that the *last sent* or *currently running* round was directed at
+  const [activeRoundTargetId, setActiveRoundTargetId]   = useState<string | null>(null);
+
+  // Personas matching the current @mention query (filtered by first name prefix)
+  const mentionFilteredPersonas = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return personas.filter((p) =>
+      p.name.split(" ")[0].toLowerCase().startsWith(mentionQuery)
+    );
+  }, [mentionQuery, personas]);
+
+  // Persona currently referenced by @Name in the input (if valid)
+  const targetedPersonaFromInput = useMemo((): Persona | null => {
+    const match = input.match(/@(\w+)/);
+    if (!match) return null;
+    const first = match[1].toLowerCase();
+    return personas.find((p) => p.name.split(" ")[0].toLowerCase() === first) ?? null;
+  }, [input, personas]);
+
   // ── Refs ─────────────────────────────────────────────────────────────────────
   const inputRef    = useRef<HTMLTextAreaElement>(null);
   const fileInputRef= useRef<HTMLInputElement>(null);
@@ -429,6 +467,23 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
       playNext();
     }
   }, [playNext]);
+
+  /**
+   * Resolves once the audio queue is empty and nothing is playing, OR as soon
+   * as autoplay is stopped (so the loop can exit cleanly without hanging).
+   */
+  const waitForAudioDrained = useCallback((): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      const check = () => {
+        if (!processingRef.current || !autoplayActiveRef.current) {
+          resolve();
+        } else {
+          setTimeout(check, 200);
+        }
+      };
+      check();
+    });
+  }, []);
 
   // Mute/unmute the currently playing audio without stopping it
   useEffect(() => {
@@ -509,6 +564,49 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     }
   }, [handleFileSelect]);
 
+  // ── @mention helpers ─────────────────────────────────────────────────────────
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    // Detect @<word> directly before the cursor position
+    const cursor = e.target.selectionStart ?? val.length;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/@(\w*)$/);
+
+    if (match) {
+      setMentionQuery(match[1].toLowerCase());
+      setMentionStartIndex(cursor - match[0].length);
+      setMentionSelectedIndex(0);
+    } else {
+      setMentionQuery(null);
+      setMentionStartIndex(-1);
+    }
+  }, []);
+
+  const selectMentionPersona = useCallback((persona: Persona) => {
+    const firstName = persona.name.split(" ")[0];
+    const before = input.slice(0, mentionStartIndex);
+    const mentionEnd = mentionStartIndex + 1 + (mentionQuery?.length ?? 0);
+    const after = input.slice(mentionEnd);
+    // Insert @FirstName with a trailing space
+    const newInput = `${before}@${firstName} ${after.startsWith(" ") ? after.slice(1) : after}`;
+    setInput(newInput);
+    setMentionQuery(null);
+    setMentionStartIndex(-1);
+    setMentionSelectedIndex(0);
+
+    // Move cursor to just after the inserted mention
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        const pos = before.length + firstName.length + 2; // "@" + name + space
+        inputRef.current.setSelectionRange(pos, pos);
+        inputRef.current.focus();
+      }
+    });
+  }, [input, mentionStartIndex, mentionQuery]);
+
   // ── URL fetch ────────────────────────────────────────────────────────────────
 
   async function fetchUrl() {
@@ -548,10 +646,10 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     text: string,
     currentMedia: MediaAttachment | null,
     conversationHistory: PanelReaction[][] | undefined,
+    targetedPersonaId: string | null,
   ): Promise<PanelReaction[] | null> => {
     setError(null);
     setIsRunning(true);
-    setReactions(new Map());
     setThinkingPersonaId(null);
     setCurrentSpeakerId(null);
     audioQueueRef.current = [];
@@ -560,6 +658,17 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     setPendingFollowUps(new Map());
     setFollowUps(new Map());
     setFollowUpLoadingId(null);
+
+    if (targetedPersonaId) {
+      // Keep existing reactions for non-targeted personas — they're "listening in"
+      setReactions((prev) => {
+        const next = new Map(prev);
+        next.delete(targetedPersonaId);
+        return next;
+      });
+    } else {
+      setReactions(new Map());
+    }
 
     const roundReactions: PanelReaction[] = [];
 
@@ -574,6 +683,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           stimulus: text || undefined,
           media: currentMedia || undefined,
           conversationHistory: conversationHistory?.length ? conversationHistory : undefined,
+          targetedPersonaId: targetedPersonaId || undefined,
         }),
       });
 
@@ -650,13 +760,28 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     const text = input.trim();
     if ((!text && !media) || isRunning) return;
 
+    // Extract @mention target BEFORE clearing the input
+    const mentionMatch = text.match(/@(\w+)/);
+    let targetedId: string | null = null;
+    if (mentionMatch) {
+      const firstName = mentionMatch[1].toLowerCase();
+      const found = personas.find((p) => p.name.split(" ")[0].toLowerCase() === firstName);
+      targetedId = found?.id ?? null;
+    }
+
     setInput("");
+    setMentionQuery(null);
+    setMentionStartIndex(-1);
+    setActiveRoundTargetId(targetedId);
 
     // Reset history for a fresh discussion
     allRoundsHistoryRef.current = [];
     setAutoplayContinuationRound(0);
 
-    const firstRoundReactions = await runPanelRound(text, media, undefined);
+    const firstRoundReactions = await runPanelRound(text, media, undefined, targetedId);
+    // After the first round, clear the active target (autoplay rounds are open to all)
+    setActiveRoundTargetId(null);
+
     if (!firstRoundReactions) {
       inputRef.current?.focus();
       return;
@@ -677,12 +802,18 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     for (let continuation = 0; continuation < maxContinuations; continuation++) {
       if (!autoplayActiveRef.current) break;
 
-      // Small pause between rounds so the UI settles and TTS has time to start
-      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      // Wait for all TTS audio from the previous round to finish before the
+      // next round's text and audio load in (prevents cut-offs)
+      await waitForAudioDrained();
+      if (!autoplayActiveRef.current) break;
+
+      // Brief UI-settle pause after audio drains
+      await new Promise<void>((resolve) => setTimeout(resolve, 600));
       if (!autoplayActiveRef.current) break;
 
       setAutoplayContinuationRound(continuation + 1);
-      const roundReactions = await runPanelRound(text, media, allRoundsHistoryRef.current);
+      // Autoplay continuation rounds are always open (no targeting)
+      const roundReactions = await runPanelRound(text, media, allRoundsHistoryRef.current, null);
       if (!roundReactions || !autoplayActiveRef.current) break;
 
       allRoundsHistoryRef.current = [...allRoundsHistoryRef.current, roundReactions];
@@ -698,9 +829,43 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     autoplayActiveRef.current = false;
     setIsAutoplayRunning(false);
     setAutoplayContinuationRound(0);
+    // Immediately silence any queued or playing audio
+    audioQueueRef.current = [];
+    processingRef.current = false;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setCurrentSpeakerId(null);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // ── Mention dropdown navigation ──────────────────────────────────────────
+    if (mentionQuery !== null && mentionFilteredPersonas.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionSelectedIndex((i) => (i + 1) % mentionFilteredPersonas.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionSelectedIndex((i) => (i - 1 + mentionFilteredPersonas.length) % mentionFilteredPersonas.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const selected = mentionFilteredPersonas[mentionSelectedIndex];
+        if (selected) selectMentionPersona(selected);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        setMentionStartIndex(-1);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runPanel(); }
   }
 
@@ -855,11 +1020,11 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
               {isAutoplayRunning ? "STOP" : isAutoplay ? "AUTOPLAY ON" : "AUTOPLAY"}
             </button>
             {/* Hover tooltip */}
-            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-sm border border-border bg-popover px-3 py-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50">
-              <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
+            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden w-64 rounded-sm border border-border bg-popover px-3 py-2 shadow-md group-hover:block">
+              <p className="font-mono text-[10px] text-popover-foreground leading-relaxed">
                 {AUTOPLAY_TOOLTIP}
               </p>
-              <p className="font-mono text-[9px] text-muted-foreground/50 mt-1.5">
+              <p className="font-mono text-[9px] text-muted-foreground/80 mt-1.5">
                 Up to {getAutoplayMaxRounds(personas.length) + 1} rounds · ~{(getAutoplayMaxRounds(personas.length) + 1) * personas.length} responses max
               </p>
             </div>
@@ -899,6 +1064,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
             isThinking={thinkingPersonaId === persona.id}
             isSpeaking={currentSpeakerId === persona.id}
             isFollowingUp={followUpLoadingId === persona.id}
+            isListening={!!activeRoundTargetId && persona.id !== activeRoundTargetId}
             audioUrl={audioUrls.get(persona.id) ?? null}
             onReplayRequest={handleReplayRequest}
           />
@@ -1009,8 +1175,68 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           </div>
         )}
 
+        {/* Targeting indicator — shown when @Name in input resolves to a persona */}
+        {targetedPersonaFromInput && (
+          <div className="px-3 py-1.5 border-b border-neon-cyan/20 bg-neon-cyan/5 flex items-center gap-2">
+            <AtSign className="h-3 w-3 text-neon-cyan flex-shrink-0" />
+            <span className="font-mono text-[10px] text-neon-cyan tracking-wider">
+              DIRECTING TO{" "}
+              <span className="font-bold">{targetedPersonaFromInput.name}</span>
+              {" — "}others will listen but not respond
+            </span>
+            <button
+              onClick={() => {
+                // Strip the @mention from the input
+                setInput((v) => v.replace(/@\w+\s?/, "").trim());
+              }}
+              className="ml-auto h-4 w-4 flex items-center justify-center text-neon-cyan/60 hover:text-neon-cyan transition-colors"
+              aria-label="Remove target"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
         {/* Text input row */}
-        <div className="p-3 flex gap-2 items-end bg-secondary/10">
+        <div className="p-3 flex gap-2 items-end bg-secondary/10 relative">
+          {/* @mention dropdown — appears above the input row */}
+          {mentionQuery !== null && mentionFilteredPersonas.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 bg-popover border border-border rounded-t-sm shadow-lg overflow-hidden z-50">
+              <div className="px-3 py-1 border-b border-border bg-secondary/30">
+                <span className="font-mono text-[9px] text-muted-foreground/60 tracking-widest">DIRECT TO PERSONA</span>
+              </div>
+              {mentionFilteredPersonas.map((p, idx) => {
+                const pIdx = personas.indexOf(p);
+                const color = AVATAR_COLORS[pIdx % AVATAR_COLORS.length];
+                return (
+                  <button
+                    key={p.id}
+                    onMouseDown={(e) => { e.preventDefault(); selectMentionPersona(p); }}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                      idx === mentionSelectedIndex
+                        ? "bg-secondary/60"
+                        : "hover:bg-secondary/30",
+                    )}
+                  >
+                    <div className={cn(
+                      "h-6 w-6 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[9px] font-bold flex-shrink-0",
+                      color,
+                    )}>
+                      {getInitials(p.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono text-xs font-bold text-foreground">{p.name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground ml-2 truncate">{p.title}</span>
+                    </div>
+                    {idx === mentionSelectedIndex && (
+                      <span className="font-mono text-[9px] text-muted-foreground/50 flex-shrink-0">↵</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* Upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -1058,7 +1284,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={
@@ -1066,7 +1292,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
                 ? "Listening... speak your question"
                 : media
                 ? "Add context about this material, or just hit send..."
-                : "Ask a question, describe something, or add context..."
+                : "Ask a question or type @ to direct it at someone..."
             }
             rows={1}
             className="flex-1 bg-transparent font-mono text-sm text-foreground placeholder-muted-foreground resize-none focus:outline-none leading-relaxed py-1 px-1 min-h-[32px] max-h-28"

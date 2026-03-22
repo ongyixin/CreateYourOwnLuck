@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid JSON body', { status: 400 });
   }
 
-  const { jobId, stimulus, media, conversationHistory } = body;
+  const { jobId, stimulus, media, conversationHistory, targetedPersonaId } = body;
   let { sessionId, personas } = body;
 
   if (!jobId || !personas?.length) {
@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
             send({ type: 'persona_reaction_complete', reaction });
           },
           conversationHistory,
+          targetedPersonaId,
         );
 
         send({ type: 'round_complete', sessionId: resolvedSessionId });

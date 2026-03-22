@@ -47,12 +47,15 @@ function buildPanelPrompt(
   allPersonas: Persona[],
   speakingPosition: number,
   isContinuation: boolean,
+  isDirectlyAddressed: boolean = false,
 ): string {
   const context = buildPersonaContext(persona, allPersonas);
   const isFirst = speakingPosition === 0;
 
   let turnInstruction: string;
-  if (isContinuation) {
+  if (isDirectlyAddressed) {
+    turnInstruction = `The founder has directed this question or comment specifically to you. Respond personally and directly — this is your moment to be candid. You may reference what others have said if relevant.`;
+  } else if (isContinuation) {
     turnInstruction = isFirst
       ? `The group has been talking for a while. Pick up the thread — respond to what's been said most recently. Bring your perspective to where the conversation is right now.`
       : `Others have just added their thoughts. Read the latest exchange, then add your take. Push back, build on something, or introduce an angle that hasn't come up yet.`;
@@ -231,9 +234,10 @@ export async function generatePersonaPanelReaction(
   priorReactions: PanelReaction[],
   speakingPosition: number,
   conversationHistory?: PanelReaction[][],
+  isDirectlyAddressed: boolean = false,
 ): Promise<PanelReaction> {
   const isContinuation = !!(conversationHistory && conversationHistory.length > 0);
-  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition, isContinuation);
+  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition, isContinuation, isDirectlyAddressed);
   const contentParts = buildUserContent(stimulus, media, priorReactions, conversationHistory);
 
   const hasImage = contentParts.some((p) => p.type === 'image');
@@ -359,6 +363,8 @@ export interface PanelReactionResult {
  * @param conversationHistory - Prior rounds from an autoplay session. When
  *   provided, personas are prompted to continue an ongoing discussion rather
  *   than give a first impression.
+ * @param targetedPersonaId - When set, only this persona responds. All others
+ *   are skipped (they remain aware via conversation history in future rounds).
  */
 export async function generateAllPanelReactions(
   personas: Persona[],
@@ -366,12 +372,21 @@ export async function generateAllPanelReactions(
   media: MediaAttachment | undefined,
   onReactionComplete: (result: PanelReactionResult) => void,
   conversationHistory?: PanelReaction[][],
+  targetedPersonaId?: string,
 ): Promise<void> {
   const accumulated: PanelReaction[] = [];
 
   for (let i = 0; i < personas.length; i++) {
     const persona = personas[i];
+
+    // When a specific persona is targeted, skip all others — they are aware
+    // of the exchange through conversation history in subsequent rounds.
+    if (targetedPersonaId && persona.id !== targetedPersonaId) {
+      continue;
+    }
+
     try {
+      const isDirectlyAddressed = !!targetedPersonaId;
       const reaction = await generatePersonaPanelReaction(
         persona,
         personas,
@@ -380,6 +395,7 @@ export async function generateAllPanelReactions(
         accumulated,
         i,
         conversationHistory,
+        isDirectlyAddressed,
       );
       accumulated.push(reaction);
       onReactionComplete({ reaction, error: null, personaId: persona.id });

@@ -526,6 +526,12 @@ export interface PanelRoundRequest {
    * a fresh first impression.
    */
   conversationHistory?: PanelReaction[][];
+  /**
+   * When set, only this persona responds to the user's message.
+   * All other personas are aware of the exchange (via conversation history)
+   * but remain silent this round.
+   */
+  targetedPersonaId?: string;
 }
 
 /** Shape of a POST body to /api/focus-group/panel/followup */
