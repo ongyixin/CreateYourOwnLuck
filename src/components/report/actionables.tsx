@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
 import { EvidenceBlock } from "./evidence-block";
+import { GtmCopilotSection } from "./gtm-copilot-section";
 import type { Actionables, Actionable } from "@/lib/types";
 
 function PriorityBadge({ priority }: { priority: Actionable["priority"] }) {
@@ -60,9 +61,10 @@ function SectionHead({
 
 interface ActionablesSectionProps {
   data: Actionables;
+  jobId?: string;
 }
 
-export function ActionablesSection({ data }: ActionablesSectionProps) {
+export function ActionablesSection({ data, jobId }: ActionablesSectionProps) {
   const order = { high: 0, medium: 1, low: 2 };
   const sorted = <T extends Actionable>(arr: T[]) =>
     [...arr].sort((a, b) => order[a.priority] - order[b.priority]);
@@ -76,9 +78,19 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
   return (
     <div className="space-y-10">
       {/* Module header */}
-      <div>
-        <div className="module-header text-neon-amber">Module 03</div>
-        <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">RECOMMENDATIONS</h2>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="module-header text-neon-amber">Module 03</div>
+          <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">RECOMMENDATIONS</h2>
+        </div>
+        {jobId && (
+          <a
+            href="#module-03b"
+            className="font-mono text-xs text-neon-amber/80 hover:text-neon-amber tracking-wider border border-neon-amber/40 hover:border-neon-amber px-3 py-1.5 rounded-sm transition-colors"
+          >
+            Jump to Module 3b →
+          </a>
+        )}
       </div>
 
       {/* What to Improve */}
@@ -194,6 +206,9 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
           </div>
         </div>
       )}
+
+      {/* GTM Brand Copilot */}
+      {jobId && <GtmCopilotSection jobId={jobId} />}
     </div>
   );
 }

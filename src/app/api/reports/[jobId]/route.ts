@@ -39,8 +39,15 @@ export async function DELETE(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await prisma.analysis.delete({ where: { jobId } });
-  deleteJob(jobId);
-
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.analysis.delete({ where: { jobId } });
+    deleteJob(jobId);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/reports]", err);
+    return NextResponse.json(
+      { error: "Failed to delete report. Please try again." },
+      { status: 500 }
+    );
+  }
 }

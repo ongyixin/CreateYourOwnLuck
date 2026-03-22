@@ -695,8 +695,6 @@ export interface ExperimentSession {
   liveMetrics: ExperimentLiveMetrics;
   results?: ExperimentResultsReport;
   status: "active" | "complete";
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface ExperimentTranscriptEntry {
@@ -741,7 +739,241 @@ export interface ExperimentRunRequest {
 }
 
 // ------------------------------------------------------------
-// 8. Pipeline stage labels (UI display)
+// 8. GTM Brand Copilot
+// ------------------------------------------------------------
+
+export type GtmPlanStatus =
+  | "generating"
+  | "ready"
+  | "approved"
+  | "executing"
+  | "complete"
+  | "failed";
+
+export type GtmAssetStatus = "generating" | "complete" | "failed";
+
+export type GtmAgentType = "messaging" | "creative" | "outreach" | "growth";
+
+export type CreativeAssetType =
+  | "landing_page"
+  | "ad_copy"
+  | "social_post"
+  | "email_sequence"
+  | "one_pager";
+
+export type OutreachTargetType =
+  | "investor"
+  | "partner"
+  | "influencer"
+  | "customer"
+  | "press";
+
+export type GrowthExperimentType =
+  | "ab_test"
+  | "landing_page_test"
+  | "pricing_test"
+  | "channel_test";
+
+export interface GtmObjective {
+  goal: string;
+  metric: string;
+  rationale: string;
+  linkedActionables: string[];
+}
+
+export interface MessagingWorkstream {
+  id: string;
+  title: string;
+  brief: string;
+  placements: string[];
+  toneShift: string;
+}
+
+export interface CreativeWorkstream {
+  id: string;
+  title: string;
+  assetType: CreativeAssetType;
+  brief: string;
+  targetAudience: string;
+  keyMessage: string;
+}
+
+export interface OutreachWorkstream {
+  id: string;
+  title: string;
+  targetType: OutreachTargetType;
+  brief: string;
+  channels: string[];
+}
+
+export interface GrowthWorkstream {
+  id: string;
+  title: string;
+  experimentType: GrowthExperimentType;
+  hypothesis: string;
+  metric: string;
+  brief: string;
+}
+
+export interface GtmExecutionOptions {
+  /** When true, Creative agent uses Gemini Imagen to generate prototype images (posters, banners, etc.). Requires GEMINI_API_KEY. */
+  enableCreativeImageGeneration?: boolean;
+}
+
+export interface GtmStrategy {
+  summary: string;
+  objectives: GtmObjective[];
+  messagingWorkstreams: MessagingWorkstream[];
+  creativeWorkstreams: CreativeWorkstream[];
+  outreachWorkstreams: OutreachWorkstream[];
+  growthWorkstreams: GrowthWorkstream[];
+  /** Options that control how the plan is executed (e.g. image generation for creative assets) */
+  executionOptions?: GtmExecutionOptions;
+}
+
+export interface MessagingAssetContent {
+  workstreamId: string;
+  workstreamTitle: string;
+  placements: Array<{
+    placement: string;
+    before: string;
+    after: string;
+    rationale: string;
+  }>;
+  positioningStatement: string;
+  valueProps: string[];
+  proofPoints: string[];
+  toneGuide: string;
+}
+
+export interface CreativeAssetContent {
+  workstreamId: string;
+  workstreamTitle: string;
+  assetType: CreativeAssetType;
+  blocks: Array<{
+    label: string;
+    content: string;
+  }>;
+  notes: string;
+  /** Base64 data URL of the Gemini-generated visual preview (optional, set by Creative agent) */
+  imageUrl?: string;
+}
+
+export interface OutreachAssetContent {
+  workstreamId: string;
+  workstreamTitle: string;
+  targetType: OutreachTargetType;
+  stakeholderProfiles: Array<{
+    role: string;
+    companyType: string;
+    whyTheyMatter: string;
+  }>;
+  templates: Array<{
+    channel: string;
+    subject?: string;
+    body: string;
+  }>;
+  followUpSequence: string[];
+}
+
+export interface GrowthAssetContent {
+  workstreamId: string;
+  workstreamTitle: string;
+  experimentType: GrowthExperimentType;
+  hypothesis: string;
+  control: string;
+  variant: string;
+  successMetric: string;
+  sampleSizeNote: string;
+  implementationSteps: string[];
+  copyVariants: Array<{
+    label: string;
+    copy: string;
+  }>;
+}
+
+export type GtmAssetContent =
+  | MessagingAssetContent
+  | CreativeAssetContent
+  | OutreachAssetContent
+  | GrowthAssetContent;
+
+export interface GtmAssetRecord {
+  id: string;
+  planId: string;
+  agent: GtmAgentType;
+  assetType: string;
+  title: string;
+  content: GtmAssetContent;
+  status: GtmAssetStatus;
+  createdAt: string;
+}
+
+export interface GtmPlanRecord {
+  id: string;
+  analysisId: string;
+  userId: string;
+  status: GtmPlanStatus;
+  planJson: GtmStrategy | null;
+  editedJson: GtmStrategy | null;
+  assets: GtmAssetRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GtmSseEvent =
+  | { type: "plan_thinking"; content: string }
+  | { type: "plan_complete"; plan: GtmStrategy; planId: string }
+  | { type: "agent_start"; agent: GtmAgentType }
+  | { type: "asset_complete"; agent: GtmAgentType; asset: GtmAssetRecord }
+  | { type: "execution_complete" }
+  | { type: "error"; error: string };
+
+// ------------------------------------------------------------
+// 9. Social Publishing
+// ------------------------------------------------------------
+
+export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK";
+
+export type PublishStatus = "pending" | "published" | "failed";
+
+export interface SocialConnectionRecord {
+  id: string;
+  platform: SocialPlatform;
+  platformAccountId: string;
+  platformUsername: string;
+  expiresAt: string | null;
+  scopes: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface PublishableContent {
+  text: string;
+  contentType?: string;
+}
+
+export interface PublishResult {
+  success: boolean;
+  externalUrl?: string;
+  errorMessage?: string;
+  logId?: string;
+}
+
+export interface PublishLogRecord {
+  id: string;
+  assetId: string;
+  connectionId: string;
+  platform: SocialPlatform;
+  contentSnapshot: string;
+  externalUrl: string | null;
+  status: PublishStatus;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+// ------------------------------------------------------------
+// 10. Pipeline stage labels (UI display)
 // ------------------------------------------------------------
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {

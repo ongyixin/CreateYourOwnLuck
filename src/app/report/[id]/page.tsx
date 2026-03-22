@@ -239,7 +239,7 @@ export default function ReportPage() {
             <IcpAssessmentSection data={report.icpAssessment} />
           )}
           {activeTab === "actions" && (
-            <ActionablesSection data={report.actionables} />
+            <ActionablesSection data={report.actionables} jobId={report.jobId} />
           )}
           {activeTab === "leads" && (
             <LeadSuggestionsSection data={report.leadSuggestions} />

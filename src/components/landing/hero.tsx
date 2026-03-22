@@ -104,7 +104,7 @@ function NavBar() {
           FITCHECK<span className="blink">_</span>
         </span>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0">
         <div className="hidden sm:flex items-center gap-4 font-mono text-[10px] tracking-widest text-muted-foreground">
           <span className="text-neon-pink">●</span> LIVE
           <span>|</span>
@@ -115,28 +115,28 @@ function NavBar() {
         <ThemeToggle />
 
         {status === "authenticated" && session?.user ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {tierInfo && (
-              <span className={`font-mono text-[9px] tracking-widest border px-1.5 py-0.5 ${tierInfo.color}`}>
+              <span className={`font-mono text-[9px] tracking-widest border px-1.5 py-0.5 shrink-0 ${tierInfo.color}`}>
                 {tierInfo.label}
               </span>
             )}
             <Link
               href="/reports"
-              className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider"
+              className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-wider shrink-0 whitespace-nowrap"
             >
-              <FileText className="w-3 h-3" />
+              <FileText className="w-3 h-3 shrink-0" />
               REPORTS
             </Link>
             {isAdmin && (
-              <Link href="/admin" className="flex items-center gap-1 font-mono text-[10px] text-neon-amber hover:text-neon-green transition-colors tracking-wider">
+              <Link href="/admin" className="flex items-center gap-1 font-mono text-[10px] text-neon-amber hover:text-neon-green transition-colors tracking-wider shrink-0">
                 <Shield className="w-3 h-3" />
                 ADMIN
               </Link>
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/" })}
-              className="flex items-center gap-1 border-2 border-border text-muted-foreground font-mono font-bold px-3 py-2 rounded-sm text-xs tracking-wider hover:border-neon-pink hover:text-neon-pink transition-all"
+              className="flex items-center gap-1 border-2 border-border text-muted-foreground font-mono font-bold px-3 py-2 rounded-sm text-xs tracking-wider hover:border-neon-pink hover:text-neon-pink transition-all shrink-0"
             >
               <LogOut className="w-3 h-3" />
               SIGN OUT
