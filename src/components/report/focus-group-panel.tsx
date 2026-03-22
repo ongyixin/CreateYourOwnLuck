@@ -25,6 +25,8 @@ import {
   Globe,
   Radio,
   MessageSquarePlus,
+  Repeat2,
+  Square,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FocusGroupAnalytics, MediaAttachment, PanelReaction, Persona } from "@/lib/types";
@@ -42,6 +44,22 @@ const AVATAR_COLORS = [
 ];
 
 const TTS_VOICES = ["alloy", "echo", "fable", "nova", "onyx", "shimmer"] as const;
+
+/**
+ * Max autoplay continuation rounds (after the initial user-triggered round).
+ * Scales inversely with persona count so the total response volume stays
+ * manageable regardless of panel size:
+ *   2 personas → 6 continuation rounds  (14 total responses)
+ *   3 personas → 4 rounds               (15 total)
+ *   4 personas → 3 rounds               (16 total)
+ *   5–6 personas → 3 rounds             (20–24 total)
+ */
+function getAutoplayMaxRounds(personaCount: number): number {
+  return Math.max(3, Math.ceil(12 / personaCount));
+}
+
+const AUTOPLAY_TOOLTIP =
+  "Autoplay: after you submit, personas keep discussing amongst themselves — reacting to each other, pushing back, and building on ideas — until the conversation naturally winds down.";
 
 const SENTIMENT_STYLES: Record<PanelReaction["sentiment"], string> = {
   positive: "border-neon-green/40 bg-neon-green/5",
@@ -332,6 +350,20 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   const [analytics, setAnalytics]               = useState<FocusGroupAnalytics | null>(null);
   const [analyzing, setAnalyzing]               = useState(false);
 
+  // ── Autoplay state ───────────────────────────────────────────────────────────
+  const [isAutoplay, setIsAutoplay]             = useState(false);
+  // State mirror of autoplayActiveRef for re-render-driven UI updates
+  const [isAutoplayRunning, setIsAutoplayRunning] = useState(false);
+  // Current continuation round index (1-based) while autoplay is active
+  const [autoplayContinuationRound, setAutoplayContinuationRound] = useState(0);
+  // Tracks all rounds' reactions for autoplay continuation context
+  const allRoundsHistoryRef                     = useRef<PanelReaction[][]>([]);
+  // Tracks whether autoplay is currently looping (separate from isRunning to
+  // allow the UI to show a "stop autoplay" affordance mid-loop)
+  const autoplayActiveRef                       = useRef(false);
+  // Ref copy of sessionId so autoplay loop can read the latest value
+  const sessionIdRef                            = useRef<string | null>(initialSessionId);
+
   // ── Follow-up state ──────────────────────────────────────────────────────────
   // personaId → hint text for personas that have something to add
   const [pendingFollowUps, setPendingFollowUps] = useState<Map<string, string>>(new Map());
@@ -362,6 +394,9 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
   // Keep isMutedRef in sync
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+  // Keep sessionIdRef in sync
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
   // ── Voice input ──────────────────────────────────────────────────────────────
   const { isListening, isSupported: voiceSupported, transcript, start: startListening, stop: stopListening } =
@@ -505,30 +540,41 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
   // ── Panel run ────────────────────────────────────────────────────────────────
 
-  async function runPanel() {
-    const text = input.trim();
-    if ((!text && !media) || isRunning) return;
-
-    setInput("");
+  /**
+   * Executes one panel round via SSE. Returns the reactions that came back from
+   * this round so the autoplay loop can accumulate history, or null on failure.
+   */
+  const runPanelRound = useCallback(async (
+    text: string,
+    currentMedia: MediaAttachment | null,
+    conversationHistory: PanelReaction[][] | undefined,
+  ): Promise<PanelReaction[] | null> => {
     setError(null);
     setIsRunning(true);
     setReactions(new Map());
     setThinkingPersonaId(null);
     setCurrentSpeakerId(null);
-    // Clear audio queue and per-persona URLs
     audioQueueRef.current = [];
     processingRef.current = false;
     setAudioUrls(new Map());
-    // Clear follow-up state for the new round
     setPendingFollowUps(new Map());
     setFollowUps(new Map());
     setFollowUpLoadingId(null);
+
+    const roundReactions: PanelReaction[] = [];
 
     try {
       const res = await fetch("/api/focus-group/panel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, jobId, personas, stimulus: text || undefined, media: media || undefined }),
+        body: JSON.stringify({
+          sessionId: sessionIdRef.current,
+          jobId,
+          personas,
+          stimulus: text || undefined,
+          media: currentMedia || undefined,
+          conversationHistory: conversationHistory?.length ? conversationHistory : undefined,
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -565,13 +611,12 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
               const reaction = event.reaction as PanelReaction;
               setThinkingPersonaId(null);
               setReactions((prev) => new Map(prev).set(reaction.personaId, reaction));
+              roundReactions.push(reaction);
 
-              // Collect follow-up hints for the post-round UI
               if (reaction.followUpHint) {
                 setPendingFollowUps((prev) => new Map(prev).set(reaction.personaId, reaction.followUpHint!));
               }
 
-              // Find this persona's TTS voice and pre-fetch audio
               const personaIndex = personas.findIndex((p) => p.id === reaction.personaId);
               const ttsVoice     = TTS_VOICES[personaIndex % TTS_VOICES.length];
               fetchAndEnqueueTTS(reaction, ttsVoice);
@@ -590,13 +635,69 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           }
         }
       }
+
+      return roundReactions;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — please try again");
+      return null;
     } finally {
       setThinkingPersonaId(null);
       setIsRunning(false);
-      inputRef.current?.focus();
     }
+  }, [jobId, personas, fetchAndEnqueueTTS]);
+
+  async function runPanel() {
+    const text = input.trim();
+    if ((!text && !media) || isRunning) return;
+
+    setInput("");
+
+    // Reset history for a fresh discussion
+    allRoundsHistoryRef.current = [];
+    setAutoplayContinuationRound(0);
+
+    const firstRoundReactions = await runPanelRound(text, media, undefined);
+    if (!firstRoundReactions) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    allRoundsHistoryRef.current = [firstRoundReactions];
+
+    if (!isAutoplay) {
+      inputRef.current?.focus();
+      return;
+    }
+
+    // ── Autoplay loop ─────────────────────────────────────────────────────────
+    const maxContinuations = getAutoplayMaxRounds(personas.length);
+    autoplayActiveRef.current = true;
+    setIsAutoplayRunning(true);
+
+    for (let continuation = 0; continuation < maxContinuations; continuation++) {
+      if (!autoplayActiveRef.current) break;
+
+      // Small pause between rounds so the UI settles and TTS has time to start
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      if (!autoplayActiveRef.current) break;
+
+      setAutoplayContinuationRound(continuation + 1);
+      const roundReactions = await runPanelRound(text, media, allRoundsHistoryRef.current);
+      if (!roundReactions || !autoplayActiveRef.current) break;
+
+      allRoundsHistoryRef.current = [...allRoundsHistoryRef.current, roundReactions];
+    }
+
+    autoplayActiveRef.current = false;
+    setIsAutoplayRunning(false);
+    setAutoplayContinuationRound(0);
+    inputRef.current?.focus();
+  }
+
+  function stopAutoplay() {
+    autoplayActiveRef.current = false;
+    setIsAutoplayRunning(false);
+    setAutoplayContinuationRound(0);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -702,31 +803,83 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
         </p>
       </div>
 
-      {/* Mute toggle + speaking indicator */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 h-6">
+      {/* Controls row: speaking indicator + autoplay toggle + mute toggle */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {/* Speaking indicator */}
+        <div className="flex items-center gap-2 h-6 min-w-0">
           {currentSpeakerId && (
             <div className="flex items-center gap-1.5 text-neon-cyan">
               <Radio className="h-3 w-3 animate-pulse" />
-              <span className="font-mono text-[10px] tracking-widest">
+              <span className="font-mono text-[10px] tracking-widest truncate">
                 {personas.find((p) => p.id === currentSpeakerId)?.name?.toUpperCase() ?? "SOMEONE"} IS SPEAKING
               </span>
             </div>
           )}
-        </div>
-        <button
-          onClick={() => setIsMuted((m) => !m)}
-          className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-sm border font-mono text-[10px] font-bold tracking-wider transition-all",
-            isMuted
-              ? "border-neon-pink/40 text-neon-pink bg-neon-pink/5"
-              : "border-border text-muted-foreground hover:border-border hover:text-foreground"
+          {/* Autoplay round progress */}
+          {isAutoplayRunning && autoplayContinuationRound > 0 && (
+            <div className="flex items-center gap-1.5 text-neon-purple/80">
+              <Repeat2 className="h-3 w-3 animate-pulse" />
+              <span className="font-mono text-[10px] tracking-widest">
+                ROUND {autoplayContinuationRound + 1} / {getAutoplayMaxRounds(personas.length) + 1}
+              </span>
+            </div>
           )}
-          aria-label={isMuted ? "Unmute" : "Mute all"}
-        >
-          {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-          {isMuted ? "MUTED" : "VOICES ON"}
-        </button>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Autoplay toggle */}
+          <div className="relative group">
+            <button
+              onClick={() => {
+                if (isAutoplayRunning) {
+                  stopAutoplay();
+                } else {
+                  setIsAutoplay((v) => !v);
+                }
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-sm border font-mono text-[10px] font-bold tracking-wider transition-all",
+                isAutoplayRunning
+                  ? "border-neon-purple/60 text-neon-purple bg-neon-purple/10 animate-pulse"
+                  : isAutoplay
+                  ? "border-neon-purple/40 text-neon-purple bg-neon-purple/5"
+                  : "border-border text-muted-foreground hover:border-neon-purple/30 hover:text-foreground"
+              )}
+              aria-label={isAutoplayRunning ? "Stop autoplay" : isAutoplay ? "Disable autoplay" : "Enable autoplay"}
+            >
+              {isAutoplayRunning ? (
+                <Square className="h-3 w-3" />
+              ) : (
+                <Repeat2 className="h-3 w-3" />
+              )}
+              {isAutoplayRunning ? "STOP" : isAutoplay ? "AUTOPLAY ON" : "AUTOPLAY"}
+            </button>
+            {/* Hover tooltip */}
+            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-sm border border-border bg-popover px-3 py-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50">
+              <p className="font-mono text-[10px] text-muted-foreground leading-relaxed">
+                {AUTOPLAY_TOOLTIP}
+              </p>
+              <p className="font-mono text-[9px] text-muted-foreground/50 mt-1.5">
+                Up to {getAutoplayMaxRounds(personas.length) + 1} rounds · ~{(getAutoplayMaxRounds(personas.length) + 1) * personas.length} responses max
+              </p>
+            </div>
+          </div>
+
+          {/* Mute toggle */}
+          <button
+            onClick={() => setIsMuted((m) => !m)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-sm border font-mono text-[10px] font-bold tracking-wider transition-all",
+              isMuted
+                ? "border-neon-pink/40 text-neon-pink bg-neon-pink/5"
+                : "border-border text-muted-foreground hover:border-border hover:text-foreground"
+            )}
+            aria-label={isMuted ? "Unmute" : "Mute all"}
+          >
+            {isMuted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+            {isMuted ? "MUTED" : "VOICES ON"}
+          </button>
+        </div>
       </div>
 
       {/* Persona grid */}

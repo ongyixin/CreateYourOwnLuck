@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid JSON body', { status: 400 });
   }
 
-  const { jobId, stimulus, media } = body;
+  const { jobId, stimulus, media, conversationHistory } = body;
   let { sessionId, personas } = body;
 
   if (!jobId || !personas?.length) {
@@ -62,23 +62,26 @@ export async function POST(req: NextRequest) {
 
   const resolvedSessionId = session.id;
 
-  // Persist user message for analytics
-  if (stimulus?.trim()) {
-    addFocusGroupMessage(resolvedSessionId, {
-      id: randomUUID(),
-      role: 'user',
-      content: stimulus.trim(),
-      timestamp: new Date().toISOString(),
-      mediaType: media?.type,
-    });
-  } else if (media) {
-    addFocusGroupMessage(resolvedSessionId, {
-      id: randomUUID(),
-      role: 'user',
-      content: `[Shared ${media.type}: ${media.name}]`,
-      timestamp: new Date().toISOString(),
-      mediaType: media.type,
-    });
+  // Persist user message for analytics (only on the first round — subsequent
+  // autoplay rounds are continuations of the same stimulus)
+  if (!conversationHistory?.length) {
+    if (stimulus?.trim()) {
+      addFocusGroupMessage(resolvedSessionId, {
+        id: randomUUID(),
+        role: 'user',
+        content: stimulus.trim(),
+        timestamp: new Date().toISOString(),
+        mediaType: media?.type,
+      });
+    } else if (media) {
+      addFocusGroupMessage(resolvedSessionId, {
+        id: randomUUID(),
+        role: 'user',
+        content: `[Shared ${media.type}: ${media.name}]`,
+        timestamp: new Date().toISOString(),
+        mediaType: media.type,
+      });
+    }
   }
 
   const stream = new ReadableStream({
@@ -131,6 +134,7 @@ export async function POST(req: NextRequest) {
 
             send({ type: 'persona_reaction_complete', reaction });
           },
+          conversationHistory,
         );
 
         send({ type: 'round_complete', sessionId: resolvedSessionId });

@@ -520,6 +520,12 @@ export interface PanelRoundRequest {
   stimulus?: string;
   /** The media the personas are reacting to. */
   media?: MediaAttachment;
+  /**
+   * Autoplay continuation: full history of prior rounds' reactions.
+   * When provided, personas treat this as an ongoing discussion rather than
+   * a fresh first impression.
+   */
+  conversationHistory?: PanelReaction[][];
 }
 
 /** Shape of a POST body to /api/focus-group/panel/followup */

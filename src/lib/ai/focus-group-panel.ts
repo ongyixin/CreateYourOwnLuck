@@ -46,14 +46,22 @@ function buildPanelPrompt(
   persona: Persona,
   allPersonas: Persona[],
   speakingPosition: number,
+  isContinuation: boolean,
 ): string {
   const context = buildPersonaContext(persona, allPersonas);
   const isFirst = speakingPosition === 0;
 
-  const turnInstruction = isFirst
-    ? `You are the first to react. Give your immediate, unfiltered first impression.`
-    : `The other participants have already weighed in — read what they said, then give your own take. ` +
-      `You can agree, push back, or add a new angle. Don't just echo others.`;
+  let turnInstruction: string;
+  if (isContinuation) {
+    turnInstruction = isFirst
+      ? `The group has been talking for a while. Pick up the thread — respond to what's been said most recently. Bring your perspective to where the conversation is right now.`
+      : `Others have just added their thoughts. Read the latest exchange, then add your take. Push back, build on something, or introduce an angle that hasn't come up yet.`;
+  } else {
+    turnInstruction = isFirst
+      ? `You are the first to react. Give your immediate, unfiltered first impression.`
+      : `The other participants have already weighed in — read what they said, then give your own take. ` +
+        `You can agree, push back, or add a new angle. Don't just echo others.`;
+  }
 
   const followUpInstruction = !isFirst
     ? `
@@ -63,10 +71,14 @@ function buildPanelPrompt(
   Only include this when you feel genuinely compelled to respond. Omit it entirely otherwise.`
     : '';
 
+  const settingDescription = isContinuation
+    ? `You're mid-conversation on a live video call — the group has been discussing this for a bit.`
+    : `You're on a live video call with the founder and other research panel members. They've just shared something and asked for reactions.`;
+
   return `${context}
 
 ## Your role right now
-You're on a live video call with the founder and other research panel members. They've just shared something and asked for reactions. You're speaking out loud, so keep it natural and conversational.
+${settingDescription} You're speaking out loud, so keep it natural and conversational.
 
 ${turnInstruction}
 
@@ -114,10 +126,11 @@ function buildUserContent(
   stimulus: string | undefined,
   media: MediaAttachment | undefined,
   priorReactions: PanelReaction[],
+  conversationHistory?: PanelReaction[][],
 ): ContentPart[] {
   const parts: ContentPart[] = [];
 
-  // --- Media ---
+  // --- Media (always provided for reference context) ---
   if (media) {
     if ((media.type === 'image' || media.type === 'video') && media.dataUrl) {
       const base64Match = media.dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -153,14 +166,30 @@ function buildUserContent(
     parts.push({ type: 'text', text: stimulus });
   }
 
-  // --- What the previous participants said ---
+  // --- Prior rounds of conversation (autoplay continuation) ---
+  if (conversationHistory && conversationHistory.length > 0) {
+    const historyText = conversationHistory
+      .map((round, idx) => {
+        const roundLines = round.map((r) => `${r.personaName.toUpperCase()}: ${r.content}`).join('\n\n');
+        return `[Round ${idx + 1}]\n${roundLines}`;
+      })
+      .join('\n\n---\n\n');
+    parts.push({
+      type: 'text',
+      text: `Full discussion so far:\n\n${historyText}`,
+    });
+  }
+
+  // --- What the previous participants said in THIS round ---
   if (priorReactions.length > 0) {
     const transcript = priorReactions
       .map((r) => `${r.personaName.toUpperCase()}: ${r.content}`)
       .join('\n\n');
     parts.push({
       type: 'text',
-      text: `What the others said before you:\n\n${transcript}`,
+      text: conversationHistory && conversationHistory.length > 0
+        ? `What the others just said (latest round):\n\n${transcript}`
+        : `What the others said before you:\n\n${transcript}`,
     });
   }
 
@@ -201,9 +230,11 @@ export async function generatePersonaPanelReaction(
   media: MediaAttachment | undefined,
   priorReactions: PanelReaction[],
   speakingPosition: number,
+  conversationHistory?: PanelReaction[][],
 ): Promise<PanelReaction> {
-  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition);
-  const contentParts = buildUserContent(stimulus, media, priorReactions);
+  const isContinuation = !!(conversationHistory && conversationHistory.length > 0);
+  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition, isContinuation);
+  const contentParts = buildUserContent(stimulus, media, priorReactions, conversationHistory);
 
   const hasImage = contentParts.some((p) => p.type === 'image');
 
@@ -324,12 +355,17 @@ export interface PanelReactionResult {
  * Run all persona reactions SEQUENTIALLY so each participant hears what
  * the previous ones said. The callback fires after each persona finishes,
  * allowing the API route to stream results turn by turn.
+ *
+ * @param conversationHistory - Prior rounds from an autoplay session. When
+ *   provided, personas are prompted to continue an ongoing discussion rather
+ *   than give a first impression.
  */
 export async function generateAllPanelReactions(
   personas: Persona[],
   stimulus: string | undefined,
   media: MediaAttachment | undefined,
   onReactionComplete: (result: PanelReactionResult) => void,
+  conversationHistory?: PanelReaction[][],
 ): Promise<void> {
   const accumulated: PanelReaction[] = [];
 
@@ -343,6 +379,7 @@ export async function generateAllPanelReactions(
         media,
         accumulated,
         i,
+        conversationHistory,
       );
       accumulated.push(reaction);
       onReactionComplete({ reaction, error: null, personaId: persona.id });
