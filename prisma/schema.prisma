@@ -28,10 +28,11 @@ model User {
   tierGrantedBy String?
   tierExpiresAt DateTime?
 
-  accounts  Account[]
-  sessions  Session[]
-  analyses  Analysis[]
-  gtmPlans  GtmPlan[]
+  accounts         Account[]
+  sessions         Session[]
+  analyses         Analysis[]
+  gtmPlans         GtmPlan[]
+  socialConnections SocialConnection[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -116,8 +117,48 @@ model GtmAsset {
   // generating | complete | failed
   status    String   @default("generating")
 
-  plan      GtmPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  plan        GtmPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  publishLogs PublishLog[]
+  createdAt   DateTime     @default(now())
+}
+
+// ── Social publishing ─────────────────────────────────────
+
+model SocialConnection {
+  id                String          @id @default(cuid())
+  userId            String
+  platform          SocialPlatform
+  platformAccountId String
+  platformUsername  String
+  accessToken       String          @db.Text
+  refreshToken      String?         @db.Text
+  expiresAt         DateTime?
+  scopes            String?
+  metadata          Json?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publishLogs PublishLog[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([userId, platform, platformAccountId])
+}
+
+model PublishLog {
+  id              String           @id @default(cuid())
+  userId          String
+  assetId         String
+  connectionId    String
+  platform        SocialPlatform
+  contentSnapshot String           @db.Text
+  externalUrl     String?
+  // pending | published | failed
+  status          String           @default("pending")
+  errorMessage    String?
+
+  asset      GtmAsset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  connection SocialConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now())
 }
 
 enum Role {
@@ -129,4 +170,10 @@ enum Tier {
   FREE
   PRO
   AGENCY
+}
+
+enum SocialPlatform {
+  LINKEDIN
+  TWITTER
+  FACEBOOK
 }

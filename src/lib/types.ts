@@ -848,6 +848,8 @@ export interface CreativeAssetContent {
     content: string;
   }>;
   notes: string;
+  /** Base64 data URL of the Gemini-generated visual preview (optional, set by Creative agent) */
+  imageUrl?: string;
 }
 
 export interface OutreachAssetContent {
@@ -921,7 +923,50 @@ export type GtmSseEvent =
   | { type: "error"; error: string };
 
 // ------------------------------------------------------------
-// 9. Pipeline stage labels (UI display)
+// 9. Social Publishing
+// ------------------------------------------------------------
+
+export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK";
+
+export type PublishStatus = "pending" | "published" | "failed";
+
+export interface SocialConnectionRecord {
+  id: string;
+  platform: SocialPlatform;
+  platformAccountId: string;
+  platformUsername: string;
+  expiresAt: string | null;
+  scopes: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface PublishableContent {
+  text: string;
+  contentType?: string;
+}
+
+export interface PublishResult {
+  success: boolean;
+  externalUrl?: string;
+  errorMessage?: string;
+  logId?: string;
+}
+
+export interface PublishLogRecord {
+  id: string;
+  assetId: string;
+  connectionId: string;
+  platform: SocialPlatform;
+  contentSnapshot: string;
+  externalUrl: string | null;
+  status: PublishStatus;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+// ------------------------------------------------------------
+// 10. Pipeline stage labels (UI display)
 // ------------------------------------------------------------
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {

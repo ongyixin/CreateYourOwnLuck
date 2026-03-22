@@ -12,9 +12,12 @@ import {
   ChevronUp,
   ArrowRight,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
+import { SocialConnectionsProvider } from "./social-connections-provider";
+import { PublishButton } from "./publish-button";
 import type {
   GtmAssetRecord,
   GtmAgentType,
@@ -153,6 +156,7 @@ function AssetCard({
 
 function MessagingAsset({ asset }: { asset: GtmAssetRecord }) {
   const content = asset.content as MessagingAssetContent;
+  const assetId = asset.id;
   return (
     <AssetCard
       title={asset.title}
@@ -185,7 +189,10 @@ function MessagingAsset({ asset }: { asset: GtmAssetRecord }) {
                       <div className="font-mono text-[10px] text-neon-green tracking-widest">
                         ✓ AFTER
                       </div>
-                      <CopyButton text={p.after} />
+                      <div className="flex items-center gap-2">
+                        <CopyButton text={p.after} />
+                        <PublishButton text={p.after} assetId={assetId} />
+                      </div>
                     </div>
                     <p className="text-[12px] text-foreground">{p.after}</p>
                   </div>
@@ -204,7 +211,10 @@ function MessagingAsset({ asset }: { asset: GtmAssetRecord }) {
             <p className="font-mono text-[10px] text-neon-cyan tracking-widest">
               POSITIONING STATEMENT
             </p>
-            <CopyButton text={content.positioningStatement} />
+            <div className="flex items-center gap-2">
+              <CopyButton text={content.positioningStatement} />
+              <PublishButton text={content.positioningStatement} assetId={assetId} />
+            </div>
           </div>
           <p className="text-sm text-foreground italic">&ldquo;{content.positioningStatement}&rdquo;</p>
         </div>
@@ -246,6 +256,7 @@ function MessagingAsset({ asset }: { asset: GtmAssetRecord }) {
 
 function CreativeAsset({ asset }: { asset: GtmAssetRecord }) {
   const content = asset.content as CreativeAssetContent;
+  const assetId = asset.id;
   return (
     <AssetCard
       title={asset.title}
@@ -254,6 +265,26 @@ function CreativeAsset({ asset }: { asset: GtmAssetRecord }) {
       badgeLabel={content.assetType?.toUpperCase().replace(/_/g, " ") ?? "CREATIVE"}
       status={asset.status}
     >
+      {/* Gemini-generated visual preview */}
+      {content.imageUrl && (
+        <div className="rounded-sm overflow-hidden border border-neon-purple/20">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-secondary border-b border-neon-purple/10">
+            <p className="font-mono text-[10px] text-neon-purple tracking-widest">
+              AI VISUAL PREVIEW
+            </p>
+            <span className="font-mono text-[9px] text-muted-foreground tracking-widest">
+              GEMINI IMAGEN
+            </span>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={content.imageUrl}
+            alt={`Visual preview for ${content.workstreamTitle}`}
+            className="w-full object-cover"
+          />
+        </div>
+      )}
+
       <div className="space-y-3">
         {content.blocks?.map((block, i) => (
           <div key={i} className="p-3 bg-secondary rounded-sm border border-neon-purple/10">
@@ -261,7 +292,10 @@ function CreativeAsset({ asset }: { asset: GtmAssetRecord }) {
               <p className="font-mono text-[10px] text-neon-purple tracking-widest">
                 {block.label.toUpperCase()}
               </p>
-              <CopyButton text={block.content} />
+              <div className="flex items-center gap-2">
+                <CopyButton text={block.content} />
+                <PublishButton text={block.content} assetId={assetId} />
+              </div>
             </div>
             <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
               {block.content}
@@ -285,8 +319,40 @@ function CreativeAsset({ asset }: { asset: GtmAssetRecord }) {
 // Outreach asset renderer
 // ──────────────────────────────────────────────────────────
 
+function LinkedInDmButton({ body }: { body: string }) {
+  const [clicked, setClicked] = useState(false);
+
+  async function handleClick() {
+    await navigator.clipboard.writeText(body);
+    setClicked(true);
+    window.open("https://www.linkedin.com/messaging/compose/", "_blank", "noopener,noreferrer");
+    setTimeout(() => setClicked(false), 3000);
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      className="flex items-center gap-1 font-mono text-[10px] tracking-wider text-muted-foreground hover:text-[#0A66C2] transition-colors"
+      title="Copy message and open LinkedIn compose"
+    >
+      {clicked ? (
+        <>
+          <Check className="h-3 w-3 text-[#0A66C2]" />
+          <span className="text-[#0A66C2] hidden sm:inline">COPIED + OPENED</span>
+        </>
+      ) : (
+        <>
+          <ExternalLink className="h-3 w-3" />
+          <span className="hidden sm:inline">SEND VIA LINKEDIN</span>
+        </>
+      )}
+    </button>
+  );
+}
+
 function OutreachAsset({ asset }: { asset: GtmAssetRecord }) {
   const content = asset.content as OutreachAssetContent;
+  const assetId = asset.id;
   return (
     <AssetCard
       title={asset.title}
@@ -320,24 +386,35 @@ function OutreachAsset({ asset }: { asset: GtmAssetRecord }) {
             MESSAGE TEMPLATES
           </p>
           <div className="space-y-3">
-            {content.templates.map((tmpl, i) => (
-              <div key={i} className="p-3 bg-secondary rounded-sm border border-neon-pink/10">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-mono text-[10px] text-neon-pink tracking-widest">
-                    {tmpl.channel.toUpperCase()}
+            {content.templates.map((tmpl, i) => {
+              const fullText = tmpl.subject ? `Subject: ${tmpl.subject}\n\n${tmpl.body}` : tmpl.body;
+              const isLinkedInDm = /linkedin\s*(dm|message|direct)/i.test(tmpl.channel);
+              return (
+                <div key={i} className="p-3 bg-secondary rounded-sm border border-neon-pink/10">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-mono text-[10px] text-neon-pink tracking-widest">
+                      {tmpl.channel.toUpperCase()}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <CopyButton text={fullText} />
+                      {isLinkedInDm ? (
+                        <LinkedInDmButton body={tmpl.body} />
+                      ) : (
+                        <PublishButton text={fullText} assetId={assetId} />
+                      )}
+                    </div>
+                  </div>
+                  {tmpl.subject && (
+                    <p className="text-xs font-bold text-foreground mb-1">
+                      Subject: {tmpl.subject}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                    {tmpl.body}
                   </p>
-                  <CopyButton text={tmpl.subject ? `Subject: ${tmpl.subject}\n\n${tmpl.body}` : tmpl.body} />
                 </div>
-                {tmpl.subject && (
-                  <p className="text-xs font-bold text-foreground mb-1">
-                    Subject: {tmpl.subject}
-                  </p>
-                )}
-                <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                  {tmpl.body}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -370,6 +447,7 @@ function OutreachAsset({ asset }: { asset: GtmAssetRecord }) {
 
 function GrowthAsset({ asset }: { asset: GtmAssetRecord }) {
   const content = asset.content as GrowthAssetContent;
+  const assetId = asset.id;
   return (
     <AssetCard
       title={asset.title}
@@ -460,7 +538,10 @@ function GrowthAsset({ asset }: { asset: GtmAssetRecord }) {
                   <p className="font-mono text-[10px] text-neon-green tracking-widest">
                     {cv.label.toUpperCase()}
                   </p>
-                  <CopyButton text={cv.copy} />
+                  <div className="flex items-center gap-2">
+                    <CopyButton text={cv.copy} />
+                    <PublishButton text={cv.copy} assetId={assetId} />
+                  </div>
                 </div>
                 <p className="text-sm text-foreground">{cv.copy}</p>
               </div>
@@ -482,6 +563,14 @@ interface GtmAssetGalleryProps {
 }
 
 export function GtmAssetGallery({ assets, streamingAgents = new Set() }: GtmAssetGalleryProps) {
+  return (
+    <SocialConnectionsProvider>
+      <GtmAssetGalleryInner assets={assets} streamingAgents={streamingAgents} />
+    </SocialConnectionsProvider>
+  );
+}
+
+function GtmAssetGalleryInner({ assets, streamingAgents = new Set() }: GtmAssetGalleryProps) {
   const [activeTab, setActiveTab] = useState<GtmAgentType>("messaging");
 
   const assetsByAgent: Record<GtmAgentType, GtmAssetRecord[]> = {

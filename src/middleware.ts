@@ -8,6 +8,10 @@ const PUBLIC_PATHS = [
   "/auth/verify-request",
   "/api/auth",
   "/api/webhooks",
+  // OAuth callbacks redirect from external platforms without session cookies
+  "/api/social/linkedin/callback",
+  "/api/social/twitter/callback",
+  "/api/social/facebook/callback",
 ];
 
 function isPublic(pathname: string): boolean {
@@ -62,5 +66,7 @@ export const config = {
     "/api/checkout/:path*",
     "/api/admin/:path*",
     "/api/gtm/:path*",
+    "/api/social/:path*",
+    "/settings/:path*",
   ],
 };

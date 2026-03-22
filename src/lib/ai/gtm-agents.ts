@@ -10,7 +10,7 @@
 //   runGrowthAgent       — designs experiments per GrowthWorkstream
 // ============================================================
 
-import { generateObject } from 'ai';
+import { generateObject, generateImage } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
@@ -155,7 +155,8 @@ export async function runMessagingAgent(
 
 // ============================================================
 // Creative Agent
-// For a CreativeWorkstream, produces full marketing asset copy.
+// For a CreativeWorkstream, produces full marketing asset copy +
+// a Gemini Imagen visual preview (when GEMINI_API_KEY is set).
 // ============================================================
 
 export async function runCreativeAgent(
@@ -170,7 +171,15 @@ export async function runCreativeAgent(
     prompt,
     temperature: 0.7,
   });
-  return result.object as CreativeAssetContent;
+  const content = result.object as CreativeAssetContent;
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    const imageUrl = await generateCreativeVisual(workstream, content, geminiKey);
+    if (imageUrl) content.imageUrl = imageUrl;
+  }
+
+  return content;
 }
 
 // ============================================================
@@ -211,4 +220,65 @@ export async function runGrowthAgent(
     temperature: 0.6,
   });
   return result.object as GrowthAssetContent;
+}
+
+// ============================================================
+// Image generation (Creative agent helper)
+// Uses Gemini Imagen 3 to produce a visual preview for each
+// creative asset. Fails silently — text content is always saved.
+// ============================================================
+
+const ASSET_TYPE_LABELS: Record<string, string> = {
+  landing_page: 'landing page hero banner',
+  ad_copy: 'digital advertisement creative',
+  social_post: 'social media graphic',
+  email_sequence: 'email header banner',
+  one_pager: 'marketing one-pager cover',
+};
+
+function buildImagePrompt(
+  workstream: CreativeWorkstream,
+  content: CreativeAssetContent,
+): string {
+  const heroBlock = content.blocks.find(
+    (b) =>
+      b.label.toLowerCase().includes('hero') ||
+      b.label.toLowerCase().includes('headline'),
+  );
+  const headline = (heroBlock?.content ?? workstream.keyMessage).slice(0, 120);
+  const assetLabel = ASSET_TYPE_LABELS[workstream.assetType] ?? 'marketing visual';
+  const visualNotes = content.notes ? content.notes.slice(0, 300) : '';
+
+  return [
+    `Professional ${assetLabel} for a modern brand.`,
+    `Core message: "${headline}".`,
+    `Target audience: ${workstream.targetAudience}.`,
+    visualNotes ? `Visual direction: ${visualNotes}` : '',
+    'Clean, modern, editorial photography or flat illustration style.',
+    'No text, no logos, no watermarks. High production quality.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function generateCreativeVisual(
+  workstream: CreativeWorkstream,
+  content: CreativeAssetContent,
+  apiKey: string,
+): Promise<string | null> {
+  try {
+    const google = createGoogleGenerativeAI({ apiKey });
+    const imagePrompt = buildImagePrompt(workstream, content);
+
+    const { image } = await generateImage({
+      model: google.image('imagen-3.0-generate-002'),
+      prompt: imagePrompt,
+      aspectRatio: workstream.assetType === 'social_post' ? '1:1' : '16:9',
+    });
+
+    return `data:image/png;base64,${image.base64}`;
+  } catch (err) {
+    console.warn('[Creative agent] Imagen generation failed (skipped):', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
