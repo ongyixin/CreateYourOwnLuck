@@ -23,6 +23,7 @@ interface FormState {
   competitorUrls: string[];
   goal: string;
   selectedSources: ScraperSource[];
+  autonomousSetup: boolean;
 }
 
 const INITIAL_FORM: FormState = {
@@ -32,6 +33,7 @@ const INITIAL_FORM: FormState = {
   competitorUrls: [""],
   goal: "",
   selectedSources: ALL_SCRAPER_SOURCES,
+  autonomousSetup: false,
 };
 
 const STEPS = [
@@ -120,6 +122,7 @@ export default function AnalyzePage() {
         .filter(Boolean),
       goal: form.goal.trim() || undefined,
       selectedSources: form.selectedSources,
+      autonomousSetup: form.autonomousSetup || undefined,
     };
 
     try {
@@ -220,7 +223,7 @@ export default function AnalyzePage() {
             {/* Step content */}
             {step === 0 && (
               <CompanyInfoStep
-                data={{ companyName: form.companyName, websiteUrl: form.websiteUrl }}
+                data={{ companyName: form.companyName, websiteUrl: form.websiteUrl, autonomousSetup: form.autonomousSetup }}
                 errors={companyErrors}
                 onChange={(d) => setForm((f) => ({ ...f, ...d }))}
               />
@@ -285,7 +288,7 @@ export default function AnalyzePage() {
                   </button>
                 )}
 
-                {isLastStep ? (
+                {isLastStep || (step === 0 && form.autonomousSetup) ? (
                   <button
                     type="button"
                     onClick={handleSubmit}

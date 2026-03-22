@@ -1,10 +1,11 @@
-import { Globe, Building2 } from "lucide-react";
+import { Globe, Building2, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export interface CompanyInfoData {
   companyName: string;
   websiteUrl: string;
+  autonomousSetup: boolean;
 }
 
 interface CompanyInfoStepProps {
@@ -69,6 +70,49 @@ export function CompanyInfoStep({
           )}
           <p className="text-xs text-zinc-500">
             FitCheck will crawl this URL to analyze your brand presence.
+          </p>
+        </div>
+      </div>
+
+      {/* Autonomous setup toggle */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onChange({ ...data, autonomousSetup: !data.autonomousSetup })}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            onChange({ ...data, autonomousSetup: !data.autonomousSetup });
+          }
+        }}
+        className={`flex items-start gap-3 rounded-sm border-2 p-4 cursor-pointer transition-all select-none ${
+          data.autonomousSetup
+            ? "border-neon-green/60 bg-neon-green/5"
+            : "border-border hover:border-border/80"
+        }`}
+      >
+        {/* Checkbox */}
+        <div
+          className={`mt-0.5 h-4 w-4 shrink-0 rounded-sm border-2 flex items-center justify-center transition-colors ${
+            data.autonomousSetup
+              ? "border-neon-green bg-neon-green"
+              : "border-zinc-600"
+          }`}
+        >
+          {data.autonomousSetup && (
+            <svg className="h-2.5 w-2.5 text-black" viewBox="0 0 10 10" fill="none">
+              <path d="M1.5 5L4 7.5L8.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 font-mono text-xs font-bold tracking-wider text-foreground">
+            <Zap className="h-3 w-3 text-neon-green" />
+            AUTONOMOUS SETUP
+          </div>
+          <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
+            Let our scrapers auto-configure materials, competitors, and sources based on your website. Skip straight to running your analysis.
           </p>
         </div>
       </div>

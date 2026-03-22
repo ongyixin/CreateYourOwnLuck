@@ -26,7 +26,7 @@ export interface AnalysisRequest {
   /** Extra context pasted or uploaded as text (pitch deck, marketing copy, etc.) */
   extraMaterials?: string;
 
-  /** Up to 3 competitor URLs */
+  /** Up to N competitor URLs — limit depends on user tier */
   competitorUrls?: string[];
 
   /** Optional goal statement: "We want to move upmarket", "Launch in Europe", etc. */
@@ -37,6 +37,15 @@ export interface AnalysisRequest {
    * Company website is always scraped regardless of this setting.
    */
   selectedSources?: ScraperSource[];
+
+  /**
+   * When true, the user opted into autonomous setup — scrapers will auto-populate
+   * materials, competitors, and sources. Goal is left blank.
+   */
+  autonomousSetup?: boolean;
+
+  /** The user's subscription tier — controls persona count and competitor limit in the pipeline. */
+  userTier?: "FREE" | "PRO" | "AGENCY";
 }
 
 // ------------------------------------------------------------
