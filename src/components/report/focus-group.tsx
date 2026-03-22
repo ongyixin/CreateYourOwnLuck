@@ -10,16 +10,21 @@ import {
   BarChart3,
   AlertTriangle,
   ArrowRightLeft,
+  LayoutGrid,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
 import type {
   FocusGroupAnalytics,
   FocusGroupMessage,
+  FocusGroupMode,
   FocusGroupPhase,
   Persona,
 } from "@/lib/types";
 import { FocusGroupAnalyticsDashboard } from "./focus-group-analytics";
+import { FocusGroupPanel } from "./focus-group-panel";
+import { Slider } from "@/components/ui/slider";
+import { useUserTier } from "@/lib/auth/use-user-tier";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -276,6 +281,13 @@ interface FocusGroupSectionProps {
 }
 
 export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
+  const { tier, isAdmin } = useUserTier();
+  const showPersonaSlider = isAdmin || tier === "PRO" || tier === "AGENCY";
+  const minPersonas = Math.min(2, personas.length);
+  const maxPersonas = personas.length;
+  const [personaCount, setPersonaCount] = useState(maxPersonas);
+
+  const [mode, setMode] = useState<FocusGroupMode>("chat");
   const [messages, setMessages] = useState<FocusGroupMessage[]>([]);
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<FocusGroupPhase>("probe");
@@ -288,6 +300,9 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const [localPersonas, setLocalPersonas] = useState<Persona[]>(personas);
 
+  // Slice to the user-chosen count; localPersonas keeps the full array for market-weight updates
+  const activePersonas = localPersonas.slice(0, personaCount);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -298,8 +313,8 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   }, [messages, thinkingPersonaId]);
 
   const personaIndexMap = useCallback(
-    (personaId: string) => localPersonas.findIndex((p) => p.id === personaId),
-    [localPersonas]
+    (personaId: string) => activePersonas.findIndex((p) => p.id === personaId),
+    [activePersonas]
   );
 
   // ── Core SSE reader ──────────────────────────────────────────────────────────
@@ -384,7 +399,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
       await runRound({
         sessionId,
         jobId,
-        personas: localPersonas,
+        personas: activePersonas,
         stimulus: text,
         phase,
       });
@@ -409,7 +424,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
       await runRound({
         sessionId,
         jobId,
-        personas: localPersonas,
+        personas: activePersonas,
         isFlipInitiation: true,
       });
       setPhase("flip");
@@ -458,21 +473,90 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   const hasMessages = messages.length > 0;
   const personaTurns = messages.filter((m) => m.role === "persona").length;
   // Flip needs at least 1 full probe round; generate report needs at least a flip round too
-  const canFlip = phase === "probe" && personaTurns >= localPersonas.length && !!sessionId;
+  const canFlip = phase === "probe" && personaTurns >= activePersonas.length && !!sessionId;
   const canAnalyze =
-    personaTurns >= localPersonas.length * 2 && !analyzing && !isRunning && !isFlipping;
+    personaTurns >= activePersonas.length * 2 && !analyzing && !isRunning && !isFlipping;
 
   const phaseConfig = PHASE_CONFIG[phase];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="module-header text-neon-amber">Focus Group Mode</div>
-        <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">
-          FOCUS GROUP
-        </h2>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="module-header text-neon-amber">Focus Group Mode</div>
+          <h2 className="font-mono text-neon-amber text-xl font-bold tracking-wider">
+            FOCUS GROUP
+          </h2>
+        </div>
+
+        {/* Mode toggle */}
+        <div className="flex items-center gap-1 border border-border rounded-sm p-1 self-start">
+          <button
+            onClick={() => setMode("chat")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-sm font-mono text-[10px] font-bold tracking-wider transition-all",
+              mode === "chat"
+                ? "bg-neon-amber/15 text-neon-amber border border-neon-amber/40"
+                : "text-muted-foreground hover:text-foreground border border-transparent"
+            )}
+          >
+            <MessageSquare className="h-3 w-3" />
+            CHAT
+          </button>
+          <button
+            onClick={() => setMode("panel")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-sm font-mono text-[10px] font-bold tracking-wider transition-all",
+              mode === "panel"
+                ? "bg-neon-purple/15 text-neon-purple border border-neon-purple/40"
+                : "text-muted-foreground hover:text-foreground border border-transparent"
+            )}
+          >
+            <LayoutGrid className="h-3 w-3" />
+            PANEL
+          </button>
+        </div>
       </div>
+
+      {/* Persona count slider — PRO / AGENCY only, locked once session starts */}
+      {showPersonaSlider && maxPersonas > minPersonas && (
+        <div className="flex items-center gap-3 border border-border rounded-sm px-4 py-3">
+          <Users className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+          <span className="font-mono text-[10px] text-muted-foreground tracking-widest flex-shrink-0">
+            PARTICIPANTS
+          </span>
+          <Slider
+            min={minPersonas}
+            max={maxPersonas}
+            value={personaCount}
+            onChange={setPersonaCount}
+            disabled={!!sessionId}
+            className="flex-1"
+          />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="font-mono text-base font-bold text-neon-amber leading-none w-5 text-right">
+              {personaCount}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              / {maxPersonas}
+            </span>
+          </div>
+          {!!sessionId && (
+            <span className="font-mono text-[9px] text-muted-foreground/50 tracking-widest flex-shrink-0 border border-border rounded-sm px-1.5 py-0.5">
+              LOCKED
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Panel mode */}
+      {mode === "panel" && (
+        <FocusGroupPanel personas={activePersonas} jobId={jobId} sessionId={sessionId} />
+      )}
+
+      {/* Chat mode */}
+      {mode === "chat" && (<>
 
       {/* Explainer */}
       <div className="terminal-card border-border">
@@ -491,7 +575,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
         {/* Sidebar */}
         <div className="space-y-3">
           <PersonaRoster
-            personas={localPersonas}
+            personas={activePersonas}
             thinkingPersonaId={thinkingPersonaId}
           />
 
@@ -562,7 +646,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
                 <div className="mt-4 flex items-center gap-1 text-muted-foreground/50">
                   <ChevronRight className="h-3 w-3" />
                   <span className="font-mono text-[10px] tracking-widest">
-                    {localPersonas.length} PARTICIPANTS READY
+                    {activePersonas.length} PARTICIPANTS READY
                   </span>
                 </div>
               </div>
@@ -591,7 +675,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
                   )}
                 >
                   {getInitials(
-                    localPersonas.find((p) => p.id === thinkingPersonaId)?.name ?? "?"
+                    activePersonas.find((p) => p.id === thinkingPersonaId)?.name ?? "?"
                   )}
                 </div>
                 <div className="border-2 border-neon-cyan/20 bg-card rounded-sm px-4 py-3">
@@ -644,8 +728,10 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
 
       {/* Analytics dashboard */}
       {analytics && (
-        <FocusGroupAnalyticsDashboard analytics={analytics} personas={localPersonas} />
+        <FocusGroupAnalyticsDashboard analytics={analytics} personas={activePersonas} />
       )}
+
+      </>)}
     </div>
   );
 }

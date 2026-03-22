@@ -43,7 +43,7 @@ function getChatModel() {
 
 // ─── Shared persona context block ─────────────────────────────────────────────
 
-function buildPersonaContext(
+export function buildPersonaContext(
   persona: Persona,
   allPersonas: Persona[],
 ): string {
