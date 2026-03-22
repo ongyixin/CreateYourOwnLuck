@@ -71,6 +71,7 @@ export type PipelineStage =
   | "analyze_actionables"
   | "analyze_leads"
   | "analyze_personas"
+  | "analyze_resonance"
   | "build_report";
 
 export const PIPELINE_STAGES: PipelineStage[] = [
@@ -85,6 +86,7 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   "analyze_actionables",
   "analyze_leads",
   "analyze_personas",
+  "analyze_resonance",
   "build_report",
 ];
 
@@ -368,6 +370,46 @@ export interface FiveSecondReaction {
 // 6. Full Report
 // ------------------------------------------------------------
 
+// ------------------------------------------------------------
+// 5f. Brand Resonance Map
+// ------------------------------------------------------------
+
+export interface ThemeSourceBreakdown {
+  sourceType: "website" | "reviews" | "social" | "search" | "video";
+  present: boolean;
+  /** -100 (very negative) to +100 (very positive) sentiment for this source */
+  sentiment: number;
+}
+
+export interface ThemeHotspot {
+  /** Short descriptive phrase, e.g. "ease of use", "pricing confusion" */
+  theme: string;
+  /** 0–100: how often this theme surfaces across sources */
+  frequencyScore: number;
+  /** -100 to +100: negative to positive market perception */
+  sentimentScore: number;
+  /** 0–100: importance of this theme to the target ICP */
+  icpImportance: number;
+  /**
+   * Quadrant classification:
+   * - leverage: high frequency + positive sentiment (amplify)
+   * - fix: high frequency + negative sentiment (urgent)
+   * - develop: low frequency + positive sentiment (opportunity)
+   * - monitor: low frequency + negative sentiment (watch)
+   */
+  category: "leverage" | "fix" | "develop" | "monitor";
+  /** 1-sentence explanation of the rating and its strategic significance */
+  summary: string;
+  sources: ThemeSourceBreakdown[];
+  evidence: Evidence[];
+}
+
+export interface BrandResonanceMap {
+  themes: ThemeHotspot[];
+  /** 1–2 sentence strategic summary of the overall resonance landscape */
+  insight: string;
+}
+
 export interface FitCheckReport {
   jobId: string;
   companyName: string;
@@ -379,6 +421,9 @@ export interface FitCheckReport {
   actionables: Actionables;
   leadSuggestions: LeadSuggestions;
   icpStudio: IcpStudio;
+
+  /** Optional — present for reports generated after the resonance map feature launch */
+  resonanceMap?: BrandResonanceMap;
 
   /** Non-fatal warnings from the pipeline (partial scrape failures, etc.) */
   warnings: string[];
@@ -481,5 +526,6 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   analyze_actionables: "Building brand direction actionables...",
   analyze_leads:       "Finding customer and lead suggestions...",
   analyze_personas:    "Building ICP Studio personas...",
+  analyze_resonance:   "Mapping brand resonance themes...",
   build_report:        "Assembling final report...",
 };

@@ -20,6 +20,7 @@ import type {
   Actionables,
   LeadSuggestions,
   IcpStudio,
+  BrandResonanceMap,
 } from '../types';
 import { TIER_LIMITS } from '../tier';
 import {
@@ -28,11 +29,13 @@ import {
   ActionablesSchema,
   LeadSuggestionsSchema,
   IcpStudioSchema,
+  BrandResonanceMapSchema,
   buildBrandPerceptionPrompt,
   buildIcpAssessmentPrompt,
   buildActionablesPrompt,
   buildLeadSuggestionsPrompt,
   buildIcpStudioPrompt,
+  buildResonanceMapPrompt,
   formatContext,
   SYSTEM_PROMPT,
 } from './prompts';
@@ -140,6 +143,12 @@ export async function generateIcpStudio(ctx: AnalysisContext): Promise<IcpStudio
   return result;
 }
 
+export async function generateResonanceMap(ctx: AnalysisContext): Promise<BrandResonanceMap> {
+  const context = formatContext(ctx.request, ctx.scrapedData);
+  const prompt = buildResonanceMapPrompt(ctx.request, context);
+  return runGenerate(BrandResonanceMapSchema, prompt) as Promise<BrandResonanceMap>;
+}
+
 // ============================================================
 // Parallel runner — use this from the pipeline runner
 // Runs all 5 sections concurrently; individual failures are isolated.
@@ -151,6 +160,7 @@ export interface AllSectionsResult {
   actionables: Actionables | null;
   leadSuggestions: LeadSuggestions | null;
   icpStudio: IcpStudio | null;
+  resonanceMap: BrandResonanceMap | null;
   /** Error messages for any section that failed */
   errors: string[];
 }
@@ -158,12 +168,13 @@ export interface AllSectionsResult {
 export async function generateAllSections(
   ctx: AnalysisContext,
 ): Promise<AllSectionsResult> {
-  const [brand, icp, actionables, leads, studio] = await Promise.allSettled([
+  const [brand, icp, actionables, leads, studio, resonance] = await Promise.allSettled([
     generateBrandPerception(ctx),
     generateIcpAssessment(ctx),
     generateActionables(ctx),
     generateLeadSuggestions(ctx),
     generateIcpStudio(ctx),
+    generateResonanceMap(ctx),
   ]);
 
   const errors: string[] = [];
@@ -187,6 +198,7 @@ export async function generateAllSections(
     actionables: unwrap(actionables, 'actionables'),
     leadSuggestions: unwrap(leads, 'leadSuggestions'),
     icpStudio: unwrap(studio, 'icpStudio'),
+    resonanceMap: unwrap(resonance, 'resonanceMap'),
     errors,
   };
 }

@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
 import CountUp from "@/components/count-up";
 import { EvidenceBlock } from "./evidence-block";
-import type { BrandPerception, BrandInsight } from "@/lib/types";
+import { ResonanceHotspot } from "./resonance-hotspot";
+import type { BrandPerception, BrandInsight, BrandResonanceMap } from "@/lib/types";
 
 function scoreColor(score: number): string {
   if (score >= 75) return "text-neon-green";
@@ -54,9 +55,10 @@ function InsightCard({
 
 interface BrandPerceptionSectionProps {
   data: BrandPerception;
+  resonanceMap?: BrandResonanceMap;
 }
 
-export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
+export function BrandPerceptionSection({ data, resonanceMap }: BrandPerceptionSectionProps) {
   const score = data.consistencyScore ?? 0;
 
   return (
@@ -171,6 +173,11 @@ export function BrandPerceptionSection({ data }: BrandPerceptionSectionProps) {
           </div>
         </div>
       </div>
+
+      {/* Resonance hotspot map */}
+      {resonanceMap && resonanceMap.themes.length > 0 && (
+        <ResonanceHotspot data={resonanceMap} />
+      )}
     </div>
   );
 }

@@ -228,7 +228,10 @@ export default function ReportPage() {
       <main className="relative z-20 max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="animate-fade-in">
           {activeTab === "brand" && (
-            <BrandPerceptionSection data={report.brandPerception} />
+            <BrandPerceptionSection
+              data={report.brandPerception}
+              resonanceMap={report.resonanceMap}
+            />
           )}
           {activeTab === "icp" && (
             <IcpAssessmentSection data={report.icpAssessment} />
