@@ -93,6 +93,9 @@ export async function executeGtmPlan(
   strategy: GtmStrategy,
   onProgress?: (event: ExecutionProgressEvent) => void,
 ): Promise<void> {
+  // Clear existing assets so regenerating produces fresh ones without duplicates
+  await prisma.gtmAsset.deleteMany({ where: { planId } });
+
   await prisma.gtmPlan.update({
     where: { id: planId },
     data: { status: 'executing' },
@@ -114,6 +117,9 @@ export async function executeGtmPlan(
     );
   }
 
+  const enableCreativeImageGeneration =
+    strategy.executionOptions?.enableCreativeImageGeneration;
+
   // Creative workstreams
   for (const ws of strategy.creativeWorkstreams) {
     tasks.push(
@@ -122,7 +128,10 @@ export async function executeGtmPlan(
         agent: 'creative',
         assetType: ws.assetType,
         title: ws.title,
-        run: () => runCreativeAgent(ws, report),
+        run: () =>
+          runCreativeAgent(ws, report, {
+            enableImageGeneration: enableCreativeImageGeneration,
+          }),
         onProgress,
       }),
     );

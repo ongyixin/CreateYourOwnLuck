@@ -12,6 +12,7 @@ import {
   Target,
   ToggleLeft,
   ToggleRight,
+  ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
@@ -123,11 +124,14 @@ function WorkstreamCard({
 
 export function GtmPlanReview({ strategy, onApprove, isApproving }: GtmPlanReviewProps) {
   const [enabled, setEnabled] = useState<WorkstreamToggleState>({
-    messaging: new Set(strategy.messagingWorkstreams.map((w) => w.id)),
-    creative: new Set(strategy.creativeWorkstreams.map((w) => w.id)),
-    outreach: new Set(strategy.outreachWorkstreams.map((w) => w.id)),
-    growth: new Set(strategy.growthWorkstreams.map((w) => w.id)),
+    messaging: new Set((strategy.messagingWorkstreams ?? []).map((w) => w.id)),
+    creative: new Set((strategy.creativeWorkstreams ?? []).map((w) => w.id)),
+    outreach: new Set((strategy.outreachWorkstreams ?? []).map((w) => w.id)),
+    growth: new Set((strategy.growthWorkstreams ?? []).map((w) => w.id)),
   });
+  const [enableCreativeImageGeneration, setEnableCreativeImageGeneration] = useState(
+    strategy.executionOptions?.enableCreativeImageGeneration ?? false,
+  );
 
   function toggle(type: keyof WorkstreamToggleState, id: string) {
     setEnabled((prev) => {
@@ -144,18 +148,22 @@ export function GtmPlanReview({ strategy, onApprove, isApproving }: GtmPlanRevie
   function buildEditedStrategy(): GtmStrategy {
     return {
       ...strategy,
-      messagingWorkstreams: strategy.messagingWorkstreams.filter((w) =>
+      messagingWorkstreams: (strategy.messagingWorkstreams ?? []).filter((w) =>
         enabled.messaging.has(w.id),
       ),
-      creativeWorkstreams: strategy.creativeWorkstreams.filter((w) =>
+      creativeWorkstreams: (strategy.creativeWorkstreams ?? []).filter((w) =>
         enabled.creative.has(w.id),
       ),
-      outreachWorkstreams: strategy.outreachWorkstreams.filter((w) =>
+      outreachWorkstreams: (strategy.outreachWorkstreams ?? []).filter((w) =>
         enabled.outreach.has(w.id),
       ),
-      growthWorkstreams: strategy.growthWorkstreams.filter((w) =>
+      growthWorkstreams: (strategy.growthWorkstreams ?? []).filter((w) =>
         enabled.growth.has(w.id),
       ),
+      executionOptions: {
+        ...strategy.executionOptions,
+        enableCreativeImageGeneration: enableCreativeImageGeneration,
+      },
     };
   }
 
@@ -179,13 +187,13 @@ export function GtmPlanReview({ strategy, onApprove, isApproving }: GtmPlanRevie
       </div>
 
       {/* Objectives */}
-      {strategy.objectives.length > 0 && (
+      {(strategy.objectives ?? []).length > 0 && (
         <div>
           <h4 className="font-mono text-neon-amber text-xs font-bold tracking-widest mb-3">
             OBJECTIVES ({strategy.objectives.length})
           </h4>
           <div className="space-y-2">
-            {strategy.objectives.map((obj, i) => (
+            {(strategy.objectives ?? []).map((obj, i) => (
               <div key={i} className="terminal-card border-l-4 border-l-neon-amber/60">
                 <div className="flex items-start gap-2">
                   <span className="font-mono text-[10px] border border-neon-amber text-neon-amber px-1.5 py-0.5 shrink-0 mt-0.5">
@@ -212,25 +220,25 @@ export function GtmPlanReview({ strategy, onApprove, isApproving }: GtmPlanRevie
         [
           {
             key: "messaging" as const,
-            workstreams: strategy.messagingWorkstreams,
+            workstreams: strategy.messagingWorkstreams ?? [],
             getDetail: (w: MessagingWorkstream) =>
               `Placements: ${w.placements.join(", ")}. Tone: ${w.toneShift}`,
           },
           {
             key: "creative" as const,
-            workstreams: strategy.creativeWorkstreams,
+            workstreams: strategy.creativeWorkstreams ?? [],
             getDetail: (w: CreativeWorkstream) =>
               `Asset type: ${w.assetType}. Audience: ${w.targetAudience}. Key message: ${w.keyMessage}`,
           },
           {
             key: "outreach" as const,
-            workstreams: strategy.outreachWorkstreams,
+            workstreams: strategy.outreachWorkstreams ?? [],
             getDetail: (w: OutreachWorkstream) =>
               `Target: ${w.targetType}. Channels: ${w.channels.join(", ")}`,
           },
           {
             key: "growth" as const,
-            workstreams: strategy.growthWorkstreams,
+            workstreams: strategy.growthWorkstreams ?? [],
             getDetail: (w: GrowthWorkstream) =>
               `${w.experimentType}: ${w.hypothesis}. Metric: ${w.metric}`,
           },
@@ -248,6 +256,39 @@ export function GtmPlanReview({ strategy, onApprove, isApproving }: GtmPlanRevie
               </h4>
             </div>
             <div className="space-y-2">
+              {key === "creative" && enabled.creative.size > 0 && (
+                <div
+                  className={cn(
+                    "terminal-card border-l-4 flex items-center justify-between gap-3",
+                    AGENT_META.creative.border,
+                  )}
+                >
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <ImageIcon className="h-4 w-4 text-neon-purple shrink-0" />
+                    <div>
+                      <p className="font-mono text-foreground text-sm font-bold tracking-wider">
+                        IMAGE GENERATION
+                      </p>
+                      <p className="text-muted-foreground text-xs mt-0.5">
+                        Generate prototype images (posters, banners, etc.) for creative assets.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEnableCreativeImageGeneration((v) => !v)}
+                    className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    title={
+                      enableCreativeImageGeneration ? "Disable image generation" : "Enable image generation"
+                    }
+                  >
+                    {enableCreativeImageGeneration ? (
+                      <ToggleRight className="h-5 w-5 text-neon-green" />
+                    ) : (
+                      <ToggleLeft className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              )}
               {workstreams.map((w) => (
                 <WorkstreamCard
                   key={w.id}

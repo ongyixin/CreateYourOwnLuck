@@ -815,6 +815,11 @@ export interface GrowthWorkstream {
   brief: string;
 }
 
+export interface GtmExecutionOptions {
+  /** When true, Creative agent uses Gemini Imagen to generate prototype images (posters, banners, etc.). Requires GEMINI_API_KEY. */
+  enableCreativeImageGeneration?: boolean;
+}
+
 export interface GtmStrategy {
   summary: string;
   objectives: GtmObjective[];
@@ -822,6 +827,8 @@ export interface GtmStrategy {
   creativeWorkstreams: CreativeWorkstream[];
   outreachWorkstreams: OutreachWorkstream[];
   growthWorkstreams: GrowthWorkstream[];
+  /** Options that control how the plan is executed (e.g. image generation for creative assets) */
+  executionOptions?: GtmExecutionOptions;
 }
 
 export interface MessagingAssetContent {

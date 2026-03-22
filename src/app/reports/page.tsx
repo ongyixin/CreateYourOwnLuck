@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Clock, ExternalLink, AlertTriangle, Loader2, FileText, Trash2 } from "lucide-react";
+import { Clock, ExternalLink, AlertTriangle, Loader2, FileText, Trash2, ArrowLeft } from "lucide-react";
 import ScanlineOverlay from "@/components/scanline-overlay";
+import AnimatedLogo from "@/components/animated-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface AnalysisSummary {
   jobId: string;
@@ -60,8 +62,13 @@ export default function ReportsPage() {
 
   async function confirmDelete(jobId: string) {
     setDeletingId(jobId);
+    setError(null);
     try {
-      const res = await fetch(`/api/reports/${jobId}`, { method: "DELETE" });
+      const res = await fetch(`/api/reports/${jobId}`, {
+        method: "DELETE",
+        credentials: "include",
+        cache: "no-store",
+      });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error ?? "Failed to delete");
@@ -90,8 +97,34 @@ export default function ReportsPage() {
     <div className="min-h-screen bg-background text-foreground font-mono">
       <ScanlineOverlay />
 
-      <div className="max-w-3xl mx-auto px-4 py-16">
-        {/* Header */}
+      {/* Nav */}
+      <nav className="sticky top-0 z-40 flex items-center justify-between px-6 py-3 border-b border-border bg-background/90 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-neon-green"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            <span className="font-mono text-[10px] tracking-wider">BACK TO HOME</span>
+          </Link>
+          <div className="w-px h-4 bg-border" />
+          <div className="flex items-center gap-2">
+            <AnimatedLogo size={18} />
+            <span className="font-mono text-neon-green font-bold text-sm tracking-wider">
+              FITCHECK<span className="blink">_</span>
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <span className="font-mono text-[10px] tracking-widest text-muted-foreground">
+            REPORTS
+          </span>
+        </div>
+      </nav>
+
+      <div className="max-w-3xl mx-auto px-4 py-10">
+        {/* Page header */}
         <div className="mb-10">
           <div className="text-[10px] text-neon-green tracking-[0.4em] uppercase mb-2">
             FITCHECK / REPORTS
@@ -215,15 +248,6 @@ export default function ReportsPage() {
             </p>
           </div>
         )}
-
-        <div className="mt-8">
-          <Link
-            href="/"
-            className="text-[10px] text-muted-foreground hover:text-neon-green transition-colors tracking-widest"
-          >
-            ← BACK TO HOME
-          </Link>
-        </div>
       </div>
 
       {/* Delete confirmation */}

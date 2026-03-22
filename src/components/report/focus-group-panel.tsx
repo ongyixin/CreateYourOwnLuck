@@ -284,10 +284,11 @@ function PersonaReactionCard({
           <p className="text-sm text-foreground leading-relaxed">{reaction.content}</p>
         )}
         {!isThinking && !streamingText && !reaction && !isListening && isQueued && (
-          <div className="flex items-center gap-1.5 text-muted-foreground/60 self-center">
-            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0ms]" />
-            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:150ms]" />
-            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:300ms]" />
+          <div className="flex items-center gap-2 text-muted-foreground/70 self-center">
+            <span className="h-1.5 w-1.5 rounded-full bg-neon-cyan/50 animate-bounce [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-neon-cyan/50 animate-bounce [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 rounded-full bg-neon-cyan/50 animate-bounce [animation-delay:300ms]" />
+            <span className="font-mono text-[10px] tracking-wider text-muted-foreground/80">PREPARING...</span>
           </div>
         )}
         {!isThinking && !streamingText && !reaction && !isListening && !isQueued && (
@@ -393,6 +394,8 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   const [roundCount, setRoundCount]             = useState(0);
   const [analytics, setAnalytics]               = useState<FocusGroupAnalytics | null>(null);
   const [analyzing, setAnalyzing]               = useState(false);
+  /** Brief preview of last submitted input — shown while personas respond to confirm receipt */
+  const [lastSubmittedPreview, setLastSubmittedPreview] = useState<string | null>(null);
 
   // ── Autoplay state ───────────────────────────────────────────────────────────
   const [isAutoplay, setIsAutoplay]             = useState(false);
@@ -433,6 +436,9 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   const audioQueueRef = useRef<Array<{ personaId: string; url: string }>>([]);
   // Track whether the queue processor is running so we don't start it twice
   const processingRef = useRef(false);
+  // Count of in-flight TTS fetch+enqueue operations so waitForAudioDrained
+  // doesn't resolve before audio has been queued from the current round.
+  const pendingTTSCountRef = useRef(0);
 
   // ── Sentence-level TTS prefetch refs ─────────────────────────────────────────
   // personaId → text accumulated during streaming (for sentence boundary detection)
@@ -512,13 +518,15 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   }, [playNext]);
 
   /**
-   * Resolves once the audio queue is empty and nothing is playing, OR as soon
-   * as autoplay is stopped (so the loop can exit cleanly without hanging).
+   * Resolves once the audio queue is empty, nothing is playing, AND all
+   * in-flight TTS fetches have completed — OR as soon as autoplay is stopped.
+   * Checking pendingTTSCountRef prevents the autoplay loop from advancing
+   * before Round N's audio has even been enqueued.
    */
   const waitForAudioDrained = useCallback((): Promise<void> => {
     return new Promise<void>((resolve) => {
       const check = () => {
-        if (!processingRef.current || !autoplayActiveRef.current) {
+        if ((!processingRef.current && pendingTTSCountRef.current === 0) || !autoplayActiveRef.current) {
           resolve();
         } else {
           setTimeout(check, 200);
@@ -560,10 +568,15 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   }, []);
 
   const fetchAndEnqueueTTS = useCallback(async (reaction: PanelReaction, ttsVoice: string) => {
-    const url = await fetchTTSSegment(reaction.content, ttsVoice);
-    if (!url) return;
-    setAudioUrls((prev) => new Map(prev).set(reaction.personaId, url));
-    enqueueAudio(reaction.personaId, url);
+    pendingTTSCountRef.current += 1;
+    try {
+      const url = await fetchTTSSegment(reaction.content, ttsVoice);
+      if (!url) return;
+      setAudioUrls((prev) => new Map(prev).set(reaction.personaId, url));
+      enqueueAudio(reaction.personaId, url);
+    } finally {
+      pendingTTSCountRef.current -= 1;
+    }
   }, [fetchTTSSegment, enqueueAudio]);
 
   // ── Replay a persona's audio ─────────────────────────────────────────────────
@@ -697,11 +710,12 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     targetedPersonaId: string | null,
   ): Promise<PanelReaction[] | null> => {
     setError(null);
-    setIsRunning(true);
+    setIsRunning(true); // Ensures banner shows for autoplay rounds; runPanel also sets it for first round
     setThinkingPersonaId(null);
     setCurrentSpeakerId(null);
     audioQueueRef.current = [];
     processingRef.current = false;
+    pendingTTSCountRef.current = 0;
     setAudioUrls(new Map());
     setPendingFollowUps(new Map());
     setFollowUps(new Map());
@@ -838,23 +852,37 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
               ttsPrefetchRef.current.delete(reaction.personaId);
 
               if (prefetch && reaction.content.startsWith(prefetch.sentence)) {
+                // Increment BEFORE .then() to bridge the gap between reaction_complete
+                // and the microtask running — prevents waitForAudioDrained from
+                // resolving before this round's audio has been enqueued.
+                pendingTTSCountRef.current += 1;
                 prefetch.promise.then(async (firstUrl) => {
-                  if (!firstUrl) {
-                    fetchAndEnqueueTTS(reaction, ttsVoice);
-                    return;
-                  }
-                  enqueueAudio(reaction.personaId, firstUrl);
+                  try {
+                    if (!firstUrl) {
+                      await fetchAndEnqueueTTS(reaction, ttsVoice);
+                      return;
+                    }
+                    enqueueAudio(reaction.personaId, firstUrl);
 
-                  const remaining = reaction.content.slice(prefetch.sentence.length).trim();
-                  if (remaining) {
-                    const remainingUrl = await fetchTTSSegment(remaining, ttsVoice);
-                    if (remainingUrl) enqueueAudio(reaction.personaId, remainingUrl);
-                  }
+                    const remaining = reaction.content.slice(prefetch.sentence.length).trim();
+                    if (remaining) {
+                      pendingTTSCountRef.current += 1;
+                      try {
+                        const remainingUrl = await fetchTTSSegment(remaining, ttsVoice);
+                        if (remainingUrl) enqueueAudio(reaction.personaId, remainingUrl);
+                      } finally {
+                        pendingTTSCountRef.current -= 1;
+                      }
+                    }
 
-                  // Fetch the full reaction text for the replay button in the background
-                  fetchTTSSegment(reaction.content, ttsVoice).then((replayUrl) => {
-                    if (replayUrl) setAudioUrls((prev) => new Map(prev).set(reaction.personaId, replayUrl));
-                  });
+                    // Fetch the full reaction text for the replay button in the background.
+                    // Not tracked — this is optional and shouldn't block the next round.
+                    fetchTTSSegment(reaction.content, ttsVoice).then((replayUrl) => {
+                      if (replayUrl) setAudioUrls((prev) => new Map(prev).set(reaction.personaId, replayUrl));
+                    });
+                  } finally {
+                    pendingTTSCountRef.current -= 1;
+                  }
                 });
               } else {
                 // Discard stale prefetch if sentence didn't match clean content
@@ -886,6 +914,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     } finally {
       setThinkingPersonaId(null);
       setIsRunning(false);
+      setLastSubmittedPreview(null);
     }
   }, [jobId, personas, fetchAndEnqueueTTS, fetchTTSSegment, enqueueAudio]);
 
@@ -901,6 +930,15 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
       const found = personas.find((p) => p.name.split(" ")[0].toLowerCase() === firstName);
       targetedId = found?.id ?? null;
     }
+
+    // Store preview for "input received" feedback (truncate to ~60 chars)
+    const preview = text
+      ? (text.length > 60 ? `${text.slice(0, 60).trim()}…` : text)
+      : media
+        ? `Shared ${media.type}${media.name ? `: ${media.name}` : ""}`
+        : null;
+    setLastSubmittedPreview(preview);
+    setIsRunning(true); // Show "input received" banner immediately, before fetch
 
     setInput("");
     setMentionQuery(null);
@@ -965,6 +1003,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     // Immediately silence any queued or playing audio
     audioQueueRef.current = [];
     processingRef.current = false;
+    pendingTTSCountRef.current = 0;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -1259,6 +1298,23 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Input received + personas thinking banner — right above input so it's visible after send */}
+      {isRunning && (
+        <div className="flex items-center gap-3 px-3 py-2.5 rounded-sm border-2 border-neon-cyan/40 bg-neon-cyan/10">
+          <Loader2 className="h-4 w-4 animate-spin text-neon-cyan flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-xs font-bold text-neon-cyan tracking-wider">
+              INPUT RECEIVED — Personas are preparing their responses
+            </p>
+            {lastSubmittedPreview && (
+              <p className="font-mono text-[10px] text-muted-foreground truncate mt-0.5">
+                "{lastSubmittedPreview}"
+              </p>
+            )}
           </div>
         </div>
       )}

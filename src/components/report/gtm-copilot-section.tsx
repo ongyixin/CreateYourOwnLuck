@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Zap,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GtmPlanReview } from "./gtm-plan-review";
@@ -183,6 +184,70 @@ export function GtmCopilotSection({ jobId }: GtmCopilotSectionProps) {
     }
   }, [jobId]);
 
+  const handleRegenerateAssets = useCallback(async () => {
+    if (state.phase !== "complete") return;
+    const { planId, plan } = state;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    setState({
+      phase: "executing",
+      planId,
+      plan,
+      assets: [],
+      activeAgents: new Set(),
+    });
+
+    try {
+      await readSseStream(
+        "/api/gtm/execute",
+        { planId },
+        (event) => {
+          if (event.type === "agent_start") {
+            setState((prev) => {
+              if (prev.phase !== "executing") return prev;
+              const next = new Set(prev.activeAgents);
+              if (event.agent) next.add(event.agent);
+              return { ...prev, activeAgents: next };
+            });
+          } else if (event.type === "asset_complete") {
+            setState((prev) => {
+              if (prev.phase !== "executing") return prev;
+              const next = new Set(prev.activeAgents);
+              if (event.agent) next.delete(event.agent);
+              return {
+                ...prev,
+                assets: [...prev.assets, event.asset!],
+                activeAgents: next,
+              };
+            });
+          } else if (event.type === "execution_complete") {
+            setState((prev) => {
+              if (prev.phase !== "executing") return prev;
+              return {
+                phase: "complete",
+                planId: prev.planId,
+                plan: prev.plan,
+                assets: prev.assets,
+              };
+            });
+          } else if (event.type === "error") {
+            console.warn("[GTM]", event.error);
+          }
+        },
+        ac.signal,
+      );
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      setState((prev) => {
+        if (prev.phase === "complete") return prev;
+        return { phase: "error", message: (err as Error).message };
+      });
+    }
+  }, [state]);
+
   const handleApprovePlan = useCallback(
     async (editedStrategy: GtmStrategy) => {
       if (state.phase !== "plan_ready") return;
@@ -271,7 +336,7 @@ export function GtmCopilotSection({ jobId }: GtmCopilotSectionProps) {
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="mt-10 border-t border-border pt-10">
+    <div id="module-03b" className="mt-10 border-t border-border pt-10 scroll-mt-24">
       {/* Section header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -285,12 +350,34 @@ export function GtmCopilotSection({ jobId }: GtmCopilotSectionProps) {
           </p>
         </div>
         {(state.phase === "complete" || state.phase === "plan_ready" || state.phase === "executing") && (
-          <button
-            onClick={() => setSectionOpen((v) => !v)}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {sectionOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </button>
+          <div className="flex items-center gap-2">
+            {state.phase === "complete" && (
+              <button
+                onClick={handleRegenerateAssets}
+                className="font-mono text-[10px] text-muted-foreground hover:text-neon-amber tracking-widest transition-colors flex items-center gap-1"
+                title="Regenerate assets using the same approved plan"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                REGENERATE ASSETS
+              </button>
+            )}
+            {(state.phase === "plan_ready" || state.phase === "complete") && (
+              <button
+                onClick={handleGeneratePlan}
+                className="font-mono text-[10px] text-muted-foreground hover:text-neon-amber tracking-widest transition-colors flex items-center gap-1"
+                title="Regenerate entire plan (new strategy)"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                REGENERATE PLAN
+              </button>
+            )}
+            <button
+              onClick={() => setSectionOpen((v) => !v)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {sectionOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </button>
+          </div>
         )}
       </div>
 
@@ -424,19 +511,11 @@ export function GtmCopilotSection({ jobId }: GtmCopilotSectionProps) {
       {/* State: complete */}
       {state.phase === "complete" && sectionOpen && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-neon-green" />
-              <p className="font-mono text-neon-green text-xs tracking-widest">
-                {state.assets.length} ASSET{state.assets.length !== 1 ? "S" : ""} PRODUCED
-              </p>
-            </div>
-            <button
-              onClick={handleGeneratePlan}
-              className="font-mono text-[10px] text-muted-foreground hover:text-neon-amber tracking-widest transition-colors"
-            >
-              REGENERATE PLAN ↺
-            </button>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-neon-green" />
+            <p className="font-mono text-neon-green text-xs tracking-widest">
+              {state.assets.length} ASSET{state.assets.length !== 1 ? "S" : ""} PRODUCED
+            </p>
           </div>
           <GtmAssetGallery assets={state.assets} />
         </div>

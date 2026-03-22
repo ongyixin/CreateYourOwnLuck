@@ -156,12 +156,18 @@ export async function runMessagingAgent(
 // ============================================================
 // Creative Agent
 // For a CreativeWorkstream, produces full marketing asset copy +
-// a Gemini Imagen visual preview (when GEMINI_API_KEY is set).
+// a Gemini Imagen visual preview (when enabled or GEMINI_API_KEY is set).
 // ============================================================
+
+export interface CreativeAgentOptions {
+  /** When true, enforce Gemini image generation for prototype visuals. Requires GEMINI_API_KEY. */
+  enableImageGeneration?: boolean;
+}
 
 export async function runCreativeAgent(
   workstream: CreativeWorkstream,
   report: FitCheckReport,
+  options?: CreativeAgentOptions,
 ): Promise<CreativeAssetContent> {
   const prompt = buildCreativeAgentPrompt(workstream, report);
   const result = await generateObject({
@@ -173,11 +179,24 @@ export async function runCreativeAgent(
   });
   const content = result.object as CreativeAssetContent;
 
+  const enableImageGeneration = options?.enableImageGeneration;
   const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
+
+  if (enableImageGeneration === true) {
+    if (!geminiKey) {
+      throw new Error(
+        '[Creative agent] Image generation is enabled but GEMINI_API_KEY is not set. ' +
+          'Add GEMINI_API_KEY to .env to generate prototype images with Gemini Imagen.',
+      );
+    }
+    const imageUrl = await generateCreativeVisual(workstream, content, geminiKey);
+    if (imageUrl) content.imageUrl = imageUrl;
+  } else if (enableImageGeneration === undefined && geminiKey) {
+    // Legacy: when option not specified (old plans), generate if key exists (backward compatible)
     const imageUrl = await generateCreativeVisual(workstream, content, geminiKey);
     if (imageUrl) content.imageUrl = imageUrl;
   }
+  // When enableImageGeneration === false: skip image generation (user opted out)
 
   return content;
 }
@@ -271,7 +290,7 @@ async function generateCreativeVisual(
     const imagePrompt = buildImagePrompt(workstream, content);
 
     const { image } = await generateImage({
-      model: google.image('imagen-3.0-generate-002'),
+      model: google.image('gemini-2.5-flash-image'),
       prompt: imagePrompt,
       aspectRatio: workstream.assetType === 'social_post' ? '1:1' : '16:9',
     });
