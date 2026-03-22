@@ -31,6 +31,7 @@ model User {
   accounts  Account[]
   sessions  Session[]
   analyses  Analysis[]
+  gtmPlans  GtmPlan[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -83,7 +84,39 @@ model Analysis {
   status     String @default("pending")
   reportJson Json?
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gtmPlans  GtmPlan[]
+  createdAt DateTime  @default(now())
+}
+
+model GtmPlan {
+  id         String     @id @default(cuid())
+  analysisId String
+  userId     String
+  // generating | ready | approved | executing | complete | failed
+  status     String     @default("generating")
+  planJson   Json?
+  editedJson Json?
+
+  analysis  Analysis   @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets    GtmAsset[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model GtmAsset {
+  id        String   @id @default(cuid())
+  planId    String
+  // messaging | creative | outreach | growth
+  agent     String
+  assetType String
+  title     String
+  content   Json
+  // generating | complete | failed
+  status    String   @default("generating")
+
+  plan      GtmPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
 

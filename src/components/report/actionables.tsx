@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
 import { EvidenceBlock } from "./evidence-block";
+import { GtmCopilotSection } from "./gtm-copilot-section";
 import type { Actionables, Actionable } from "@/lib/types";
 
 function PriorityBadge({ priority }: { priority: Actionable["priority"] }) {
@@ -60,9 +61,10 @@ function SectionHead({
 
 interface ActionablesSectionProps {
   data: Actionables;
+  jobId?: string;
 }
 
-export function ActionablesSection({ data }: ActionablesSectionProps) {
+export function ActionablesSection({ data, jobId }: ActionablesSectionProps) {
   const order = { high: 0, medium: 1, low: 2 };
   const sorted = <T extends Actionable>(arr: T[]) =>
     [...arr].sort((a, b) => order[a.priority] - order[b.priority]);
@@ -194,6 +196,9 @@ export function ActionablesSection({ data }: ActionablesSectionProps) {
           </div>
         </div>
       )}
+
+      {/* GTM Brand Copilot */}
+      {jobId && <GtmCopilotSection jobId={jobId} />}
     </div>
   );
 }
