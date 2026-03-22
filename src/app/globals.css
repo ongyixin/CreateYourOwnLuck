@@ -226,15 +226,6 @@
     animation: count-pulse-amber 2s ease-in-out infinite;
   }
 
-  @keyframes scan {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100vh); }
-  }
-
-  .scan-line {
-    animation: scan 6s linear infinite;
-  }
-
   @keyframes gradient-shift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }

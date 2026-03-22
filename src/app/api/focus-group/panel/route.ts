@@ -3,11 +3,12 @@
  *
  * Panel mode endpoint: accepts optional visual media + text stimulus,
  * runs personas SEQUENTIALLY (each hears the previous ones), and streams
- * results turn by turn via SSE.
+ * results token-by-token via SSE.
  *
  * SSE event types:
  *   { type: 'session_id', sessionId: string }
  *   { type: 'persona_reaction_start', personaId: string, personaName: string }
+ *   { type: 'persona_reaction_chunk', personaId: string, delta: string }
  *   { type: 'persona_reaction_complete', reaction: PanelReaction }
  *   { type: 'round_complete', sessionId: string }
  *   { type: 'error', error: string }
@@ -92,20 +93,14 @@ export async function POST(req: NextRequest) {
       try {
         send({ type: 'session_id', sessionId: resolvedSessionId });
 
-        // Run personas sequentially; emit start/complete per turn so the
-        // client knows exactly when each person begins speaking.
+        // Run personas sequentially; emit start/chunk/complete per turn so the
+        // client can render tokens as they arrive and show a typing indicator.
         await generateAllPanelReactions(
           personas,
           stimulus,
           media as MediaAttachment | undefined,
           ({ reaction, error, personaId }) => {
-            // Announce this speaker
             const persona = personas.find((p) => p.id === personaId);
-            send({
-              type: 'persona_reaction_start',
-              personaId,
-              personaName: persona?.name ?? 'Unknown',
-            });
 
             if (error || !reaction) {
               send({
@@ -136,6 +131,19 @@ export async function POST(req: NextRequest) {
           },
           conversationHistory,
           targetedPersonaId,
+          // onReactionStart — fires before generation so client shows typing indicator
+          (personaId) => {
+            const persona = personas.find((p) => p.id === personaId);
+            send({
+              type: 'persona_reaction_start',
+              personaId,
+              personaName: persona?.name ?? 'Unknown',
+            });
+          },
+          // onChunk — fires for each token delta so client renders text progressively
+          (personaId, delta) => {
+            send({ type: 'persona_reaction_chunk', personaId, delta });
+          },
         );
 
         send({ type: 'round_complete', sessionId: resolvedSessionId });

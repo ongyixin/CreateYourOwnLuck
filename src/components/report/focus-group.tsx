@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Users,
   Send,
@@ -11,6 +11,8 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   LayoutGrid,
+  AtSign,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import NeonBadge from "@/components/neon-badge";
@@ -23,7 +25,6 @@ import type {
 } from "@/lib/types";
 import { FocusGroupAnalyticsDashboard } from "./focus-group-analytics";
 import { FocusGroupPanel } from "./focus-group-panel";
-import { Slider } from "@/components/ui/slider";
 import { useUserTier } from "@/lib/auth/use-user-tier";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -282,10 +283,13 @@ interface FocusGroupSectionProps {
 
 export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   const { tier, isAdmin } = useUserTier();
-  const showPersonaSlider = isAdmin || tier === "PRO" || tier === "AGENCY";
-  const minPersonas = Math.min(2, personas.length);
-  const maxPersonas = personas.length;
-  const [personaCount, setPersonaCount] = useState(maxPersonas);
+  const showPersonaPicker = isAdmin || tier === "PRO" || tier === "AGENCY";
+
+  // Which personas are included — starts as all; localPersonas holds the full array
+  // so market-weight SSE updates aren't lost when the user changes the selection.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(personas.map((p) => p.id))
+  );
 
   const [mode, setMode] = useState<FocusGroupMode>("chat");
   const [messages, setMessages] = useState<FocusGroupMessage[]>([]);
@@ -300,8 +304,41 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const [localPersonas, setLocalPersonas] = useState<Persona[]>(personas);
 
-  // Slice to the user-chosen count; localPersonas keeps the full array for market-weight updates
-  const activePersonas = localPersonas.slice(0, personaCount);
+  // Preserve order from localPersonas; filter to only the selected set
+  const activePersonas = localPersonas.filter((p) => selectedIds.has(p.id));
+
+  function togglePersona(id: string) {
+    if (sessionId) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        if (next.size <= 2) return prev; // enforce minimum 2
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  // ── @mention / targeting state ───────────────────────────────────────────────
+  const [mentionQuery, setMentionQuery]                   = useState<string | null>(null);
+  const [mentionStartIndex, setMentionStartIndex]         = useState<number>(-1);
+  const [mentionSelectedIndex, setMentionSelectedIndex]   = useState<number>(0);
+
+  const mentionFilteredPersonas = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return activePersonas.filter((p) =>
+      p.name.split(" ")[0].toLowerCase().startsWith(mentionQuery)
+    );
+  }, [mentionQuery, activePersonas]);
+
+  const targetedPersonaFromInput = useMemo((): Persona | null => {
+    const match = input.match(/@(\w+)/);
+    if (!match) return null;
+    const first = match[1].toLowerCase();
+    return activePersonas.find((p) => p.name.split(" ")[0].toLowerCase() === first) ?? null;
+  }, [input, activePersonas]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -385,13 +422,64 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
     }
   }
 
+  // ── @mention helpers ─────────────────────────────────────────────────────────
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    const cursor = e.target.selectionStart ?? val.length;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/@(\w*)$/);
+
+    if (match) {
+      setMentionQuery(match[1].toLowerCase());
+      setMentionStartIndex(cursor - match[0].length);
+      setMentionSelectedIndex(0);
+    } else {
+      setMentionQuery(null);
+      setMentionStartIndex(-1);
+    }
+  }, []);
+
+  const selectMentionPersona = useCallback((persona: Persona) => {
+    const firstName = persona.name.split(" ")[0];
+    const before = input.slice(0, mentionStartIndex);
+    const mentionEnd = mentionStartIndex + 1 + (mentionQuery?.length ?? 0);
+    const after = input.slice(mentionEnd);
+    const newInput = `${before}@${firstName} ${after.startsWith(" ") ? after.slice(1) : after}`;
+    setInput(newInput);
+    setMentionQuery(null);
+    setMentionStartIndex(-1);
+    setMentionSelectedIndex(0);
+
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        const pos = before.length + firstName.length + 2;
+        inputRef.current.setSelectionRange(pos, pos);
+        inputRef.current.focus();
+      }
+    });
+  }, [input, mentionStartIndex, mentionQuery]);
+
   // ── Send a probe/flip follow-up message ───────────────────────────────────
 
   async function sendMessage() {
     const text = input.trim();
     if (!text || isRunning) return;
 
+    // Extract @mention target BEFORE clearing the input
+    const mentionMatch = text.match(/@(\w+)/);
+    let targetedId: string | undefined;
+    if (mentionMatch) {
+      const first = mentionMatch[1].toLowerCase();
+      const found = activePersonas.find((p) => p.name.split(" ")[0].toLowerCase() === first);
+      targetedId = found?.id;
+    }
+
     setInput("");
+    setMentionQuery(null);
+    setMentionStartIndex(-1);
     setError(null);
     setIsRunning(true);
 
@@ -402,6 +490,7 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
         personas: activePersonas,
         stimulus: text,
         phase,
+        targetedPersonaId: targetedId,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error — please try again");
@@ -464,6 +553,30 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (mentionQuery !== null && mentionFilteredPersonas.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionSelectedIndex((i) => (i + 1) % mentionFilteredPersonas.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionSelectedIndex((i) => (i - 1 + mentionFilteredPersonas.length) % mentionFilteredPersonas.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const selected = mentionFilteredPersonas[mentionSelectedIndex];
+        if (selected) selectMentionPersona(selected);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        setMentionStartIndex(-1);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -519,34 +632,88 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
         </div>
       </div>
 
-      {/* Persona count slider — PRO / AGENCY only, locked once session starts */}
-      {showPersonaSlider && maxPersonas > minPersonas && (
-        <div className="flex items-center gap-3 border border-border rounded-sm px-4 py-3">
-          <Users className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-          <span className="font-mono text-[10px] text-muted-foreground tracking-widest flex-shrink-0">
-            PARTICIPANTS
-          </span>
-          <Slider
-            min={minPersonas}
-            max={maxPersonas}
-            value={personaCount}
-            onChange={setPersonaCount}
-            disabled={!!sessionId}
-            className="flex-1"
-          />
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="font-mono text-base font-bold text-neon-amber leading-none w-5 text-right">
-              {personaCount}
-            </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              / {maxPersonas}
-            </span>
+      {/* Persona picker — PRO / AGENCY only, locked once session starts */}
+      {showPersonaPicker && personas.length > 2 && (
+        <div className="border border-border rounded-sm p-4 space-y-3">
+          {/* Header row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="font-mono text-[10px] text-muted-foreground tracking-widest">
+                PARTICIPANTS
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] font-bold text-neon-amber">
+                {selectedIds.size}
+              </span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                / {localPersonas.length}
+              </span>
+              {!sessionId && selectedIds.size < localPersonas.length && (
+                <button
+                  onClick={() => setSelectedIds(new Set(localPersonas.map((p) => p.id)))}
+                  className="font-mono text-[9px] text-muted-foreground/60 hover:text-foreground tracking-widest transition-colors underline underline-offset-2 ml-1"
+                >
+                  ALL
+                </button>
+              )}
+              {!!sessionId && (
+                <span className="font-mono text-[9px] text-muted-foreground/50 tracking-widest border border-border rounded-sm px-1.5 py-0.5">
+                  LOCKED
+                </span>
+              )}
+            </div>
           </div>
-          {!!sessionId && (
-            <span className="font-mono text-[9px] text-muted-foreground/50 tracking-widest flex-shrink-0 border border-border rounded-sm px-1.5 py-0.5">
-              LOCKED
-            </span>
-          )}
+
+          {/* Persona chips */}
+          <div className="flex flex-wrap gap-2">
+            {localPersonas.map((persona, i) => {
+              const isSelected = selectedIds.has(persona.id);
+              const isLast = isSelected && selectedIds.size <= 2;
+              const color = AVATAR_COLORS[i % AVATAR_COLORS.length];
+              return (
+                <button
+                  key={persona.id}
+                  onClick={() => togglePersona(persona.id)}
+                  disabled={!!sessionId || isLast}
+                  title={
+                    isLast
+                      ? "Need at least 2 participants"
+                      : isSelected
+                      ? `Remove ${persona.name}`
+                      : `Add ${persona.name}`
+                  }
+                  className={cn(
+                    "group flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-sm border transition-all",
+                    isSelected
+                      ? "border-neon-amber/40 bg-neon-amber/5 text-foreground hover:border-neon-amber/70 hover:bg-neon-amber/10"
+                      : "border-border text-muted-foreground hover:border-border hover:bg-secondary/40",
+                    (!!sessionId || isLast) && "cursor-not-allowed opacity-60",
+                    !sessionId && !isLast && "cursor-pointer"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "h-6 w-6 rounded-[3px] flex items-center justify-center text-primary-foreground font-mono text-[9px] font-bold flex-shrink-0 transition-opacity",
+                      color,
+                      !isSelected && "opacity-40"
+                    )}
+                  >
+                    {getInitials(persona.name)}
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className="font-mono text-[11px] font-bold leading-tight truncate max-w-[100px]">
+                      {persona.name}
+                    </p>
+                    <p className="font-mono text-[9px] text-muted-foreground leading-tight truncate max-w-[120px] hidden sm:block">
+                      {persona.title}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -692,14 +859,74 @@ export function FocusGroupSection({ personas, jobId }: FocusGroupSectionProps) {
             )}
           </div>
 
+          {/* @mention dropdown — inline to avoid overflow-hidden clipping */}
+          {mentionQuery !== null && mentionFilteredPersonas.length > 0 && (
+            <div className="border-t border-border">
+              <div className="px-3 py-1 bg-secondary/20 border-b border-border">
+                <span className="font-mono text-[9px] text-muted-foreground/60 tracking-widest">DIRECT TO PERSONA — type more to filter</span>
+              </div>
+              {mentionFilteredPersonas.map((p, idx) => {
+                const pIdx = activePersonas.indexOf(p);
+                const color = AVATAR_COLORS[pIdx % AVATAR_COLORS.length];
+                return (
+                  <button
+                    key={p.id}
+                    onMouseDown={(e) => { e.preventDefault(); selectMentionPersona(p); }}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                      idx === mentionSelectedIndex ? "bg-secondary/60" : "hover:bg-secondary/30",
+                    )}
+                  >
+                    <div className={cn(
+                      "h-6 w-6 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[9px] font-bold flex-shrink-0",
+                      color,
+                    )}>
+                      {getInitials(p.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-mono text-xs font-bold text-foreground">{p.name}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground ml-2 truncate">{p.title}</span>
+                    </div>
+                    {idx === mentionSelectedIndex && (
+                      <span className="font-mono text-[9px] text-muted-foreground/50 flex-shrink-0">↵</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Targeting indicator */}
+          {targetedPersonaFromInput && (
+            <div className="border-t border-neon-cyan/20 bg-neon-cyan/5 px-3 py-1.5 flex items-center gap-2">
+              <AtSign className="h-3 w-3 text-neon-cyan flex-shrink-0" />
+              <span className="font-mono text-[10px] text-neon-cyan tracking-wider">
+                DIRECTING TO{" "}
+                <span className="font-bold">{targetedPersonaFromInput.name}</span>
+                {" — "}others will listen but not respond
+              </span>
+              <button
+                onClick={() => setInput((v) => v.replace(/@\w+\s?/, "").trim())}
+                className="ml-auto h-4 w-4 flex items-center justify-center text-neon-cyan/60 hover:text-neon-cyan transition-colors"
+                aria-label="Remove target"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
           {/* Input — hidden during flip initiation */}
           <div className="border-t border-border p-3 flex gap-2 items-end bg-secondary/10">
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder={phaseConfig.inputPlaceholder}
+              placeholder={
+                targetedPersonaFromInput
+                  ? `Ask ${targetedPersonaFromInput.name.split(" ")[0]} directly...`
+                  : phaseConfig.inputPlaceholder
+              }
               rows={1}
               className="flex-1 bg-transparent font-mono text-sm text-foreground placeholder-muted-foreground resize-none focus:outline-none leading-relaxed py-1 px-1 min-h-[32px] max-h-28"
               style={{ fieldSizing: "content" } as React.CSSProperties}

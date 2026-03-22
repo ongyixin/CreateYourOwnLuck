@@ -22,10 +22,6 @@ export default function ScanlineOverlay() {
         </filter>
         <rect width="100%" height="100%" filter="url(#grain)" />
       </svg>
-      <div
-        className="absolute left-0 w-full h-[1px] scan-line opacity-30"
-        style={{ background: 'linear-gradient(90deg, transparent, hsl(153 100% 50% / 0.2), transparent)' }}
-      />
     </div>
   );
 }

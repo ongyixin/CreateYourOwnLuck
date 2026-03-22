@@ -252,17 +252,14 @@ export function normalizeTrustpilotReviews(items: unknown[]): StructuredReview[]
 
 // ─── Tweet normalizer ─────────────────────────────────────────────────────────
 
+// Field names match the apidojo/tweet-scraper output schema.
 interface RawTweet {
   url?: string;
-  full_text?: string;
   text?: string;
-  author?: { username?: string; name?: string };
-  user?: { screen_name?: string };
-  favorite_count?: number;
-  public_metrics?: { like_count?: number };
-  created_at?: string;
+  author?: { userName?: string; name?: string };
+  likeCount?: number;
+  createdAt?: string;
   isRetweet?: boolean;
-  retweeted?: boolean;
 }
 
 /**
@@ -276,27 +273,20 @@ export function normalizeTweets(items: unknown[]): SocialMention[] {
     const item = raw as RawTweet;
 
     // Skip retweets
-    if (item.isRetweet || item.retweeted) continue;
+    if (item.isRetweet) continue;
 
-    const text = item.full_text ?? item.text ?? "";
+    const text = item.text ?? "";
     if (!text) continue;
 
-    const likes =
-      item.favorite_count ??
-      item.public_metrics?.like_count ??
-      0;
-
-    const handle =
-      item.author?.username ??
-      item.user?.screen_name ??
-      undefined;
+    const likes = item.likeCount ?? 0;
+    const handle = item.author?.userName ?? undefined;
 
     mentions.push({
       platform: "twitter",
       text: truncate(text, 280),
       authorHandle: handle,
       likes,
-      date: item.created_at,
+      date: item.createdAt,
       url: item.url,
     });
 

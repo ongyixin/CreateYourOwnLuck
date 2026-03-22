@@ -49,6 +49,11 @@ interface FocusGroupChatRequest {
   phase?: FocusGroupPhase;
   /** When true: transition to flip phase and generate one question per persona. */
   isFlipInitiation?: boolean;
+  /**
+   * When set, only this persona responds to the user's message.
+   * All others are aware via conversation history but stay silent this round.
+   */
+  targetedPersonaId?: string;
 }
 
 function sseEvent(data: object): string {
@@ -67,7 +72,7 @@ export async function POST(req: NextRequest) {
     return new Response('Invalid JSON body', { status: 400 });
   }
 
-  const { jobId, isFlipInitiation, phase } = body;
+  const { jobId, isFlipInitiation, phase, targetedPersonaId } = body;
   let { sessionId, personas, stimulus } = body;
 
   if (!jobId || !personas?.length) {
@@ -155,7 +160,13 @@ export async function POST(req: NextRequest) {
           const sessionNow = getFocusGroupSession(session!.id)!;
           const speakingOrder = getSpeakingOrder(sessionNow.personas, roundIndex);
 
-          for (const persona of speakingOrder) {
+          // When a persona is targeted, only they respond; others are aware
+          // of the exchange through the conversation history in future rounds.
+          const effectiveOrder = targetedPersonaId
+            ? speakingOrder.filter((p) => p.id === targetedPersonaId)
+            : speakingOrder;
+
+          for (const persona of effectiveOrder) {
             send({ type: 'persona_start', personaId: persona.id, personaName: persona.name });
 
             const latest = getFocusGroupSession(session!.id)!;
@@ -164,7 +175,8 @@ export async function POST(req: NextRequest) {
               persona,
               latest.personas,
               latest.messages,
-              currentPhase
+              currentPhase,
+              !!targetedPersonaId,
             );
 
             const personaMsg: FocusGroupMessage = {

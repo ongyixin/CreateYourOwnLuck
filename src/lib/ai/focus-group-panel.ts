@@ -7,12 +7,87 @@
  * via multimodal content parts in the Vercel AI SDK.
  */
 
-import { generateText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { streamText } from 'ai';
+import { createHash } from 'crypto';
+import { createGoogleGenerativeAI, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import type { MediaAttachment, PanelReaction, Persona } from '../types';
 import { buildPersonaContext } from './focus-group';
+
+// ─── Reaction cache ───────────────────────────────────────────────────────────
+//
+// A 30-minute TTL in-memory cache keyed on a hash of the inputs that determine
+// a persona's response. Cache hits skip the AI call entirely, returning the
+// stored reaction immediately. Useful when the same stimulus is tested
+// repeatedly (e.g. iteration sessions).
+//
+// Anchored to globalThis so Next.js dev-mode module reloads share the same
+// cache instance across routes.
+
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __fitcheckPanelCache: Map<string, { reaction: PanelReaction; expiresAt: number }> | undefined;
+}
+
+const panelReactionCache: Map<string, { reaction: PanelReaction; expiresAt: number }> =
+  globalThis.__fitcheckPanelCache ??
+  (globalThis.__fitcheckPanelCache = new Map());
+
+function buildCacheKey(
+  personaId: string,
+  stimulus: string | undefined,
+  media: MediaAttachment | undefined,
+  priorReactions: PanelReaction[],
+  conversationHistory: PanelReaction[][] | undefined,
+): string {
+  const h = createHash('sha256');
+  h.update(personaId);
+  h.update('|');
+  h.update(stimulus ?? '');
+  h.update('|');
+  if (media) {
+    h.update(media.type + ':' + media.name);
+    if (media.extractedText) h.update(media.extractedText.slice(0, 500));
+    if (media.dataUrl) h.update(media.dataUrl.slice(0, 200));
+  }
+  h.update('|');
+  for (const r of priorReactions) {
+    h.update(r.personaId + ':' + r.content.slice(0, 100));
+  }
+  h.update('|');
+  if (conversationHistory) {
+    for (const round of conversationHistory.slice(-3)) {
+      for (const r of round) {
+        h.update(r.personaId + ':' + r.content.slice(0, 100));
+      }
+    }
+  }
+  return h.digest('hex');
+}
+
+function getCachedReaction(key: string): PanelReaction | null {
+  const entry = panelReactionCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    panelReactionCache.delete(key);
+    return null;
+  }
+  return entry.reaction;
+}
+
+function setCachedReaction(key: string, reaction: PanelReaction): void {
+  // Evict expired entries periodically to prevent unbounded memory growth
+  if (panelReactionCache.size > 200) {
+    const now = Date.now();
+    for (const [k, v] of Array.from(panelReactionCache.entries())) {
+      if (now > v.expiresAt) panelReactionCache.delete(k);
+    }
+  }
+  panelReactionCache.set(key, { reaction, expiresAt: Date.now() + CACHE_TTL_MS });
+}
 
 // ─── Model selection ──────────────────────────────────────────────────────────
 
@@ -89,7 +164,8 @@ Guidelines:
 - If you can see an image or video frame, lead with what stands out visually.
 - Be specific — reference the actual copy, design, claim, or detail you're reacting to.
 - Express genuine emotion that fits your worldview: excitement, skepticism, confusion, delight.
-- 2–3 sentences max. Speak like you're talking, not writing a review.
+- STRICT: 1–2 short sentences only. No more. Speak like you're talking, not writing a review.
+- Always finish your sentence completely before stopping.
 - After your reaction, add a sentiment tag on its own line:
   [SENTIMENT: positive|neutral|skeptical|negative]${followUpInstruction}
 
@@ -111,8 +187,9 @@ You're on a live video call. The full group has already given their initial reac
 Now it's your turn. Address whoever you're responding to by name if it's clear. Speak naturally, as if picking up a thread of conversation.
 
 Guidelines:
-- 2–3 sentences max.
+- STRICT: 1–2 short sentences only. No more.
 - Be direct — you're following up on a specific point, not rehashing your entire view.
+- Always finish your sentence completely before stopping.
 - After your follow-up, add a sentiment tag on its own line:
   [SENTIMENT: positive|neutral|skeptical|negative]
 
@@ -130,8 +207,13 @@ function buildUserContent(
   media: MediaAttachment | undefined,
   priorReactions: PanelReaction[],
   conversationHistory?: PanelReaction[][],
+  speakingPosition: number = 0,
 ): ContentPart[] {
   const parts: ContentPart[] = [];
+
+  // Non-first personas get compressed media text — prior reactions already
+  // contextualize the key content so less raw source is needed.
+  const maxMediaChars = speakingPosition === 0 ? 8000 : 2000;
 
   // --- Media (always provided for reference context) ---
   if (media) {
@@ -151,7 +233,7 @@ function buildUserContent(
     if (media.type === 'pdf' && media.extractedText) {
       parts.push({
         type: 'text',
-        text: `[PDF: "${media.name}"]\n\n${media.extractedText.slice(0, 8000)}`,
+        text: `[PDF: "${media.name}"]\n\n${media.extractedText.slice(0, maxMediaChars)}`,
       });
     }
 
@@ -159,7 +241,7 @@ function buildUserContent(
       const src = media.sourceUrl ? ` — ${media.sourceUrl}` : '';
       parts.push({
         type: 'text',
-        text: `[Web page: "${media.name}"${src}]\n\n${media.extractedText.slice(0, 8000)}`,
+        text: `[Web page: "${media.name}"${src}]\n\n${media.extractedText.slice(0, maxMediaChars)}`,
       });
     }
   }
@@ -170,11 +252,14 @@ function buildUserContent(
   }
 
   // --- Prior rounds of conversation (autoplay continuation) ---
+  // Cap at the last 3 rounds to prevent unbounded context growth in long sessions.
   if (conversationHistory && conversationHistory.length > 0) {
-    const historyText = conversationHistory
+    const recentHistory = conversationHistory.slice(-3);
+    const historyText = recentHistory
       .map((round, idx) => {
         const roundLines = round.map((r) => `${r.personaName.toUpperCase()}: ${r.content}`).join('\n\n');
-        return `[Round ${idx + 1}]\n${roundLines}`;
+        const roundNumber = conversationHistory.length - recentHistory.length + idx + 1;
+        return `[Round ${roundNumber}]\n${roundLines}`;
       })
       .join('\n\n---\n\n');
     parts.push({
@@ -235,10 +320,20 @@ export async function generatePersonaPanelReaction(
   speakingPosition: number,
   conversationHistory?: PanelReaction[][],
   isDirectlyAddressed: boolean = false,
+  onChunk?: (delta: string) => void,
 ): Promise<PanelReaction> {
+  // Check cache first — skip AI call entirely on hits
+  const cacheKey = buildCacheKey(persona.id, stimulus, media, priorReactions, conversationHistory);
+  const cached = getCachedReaction(cacheKey);
+  if (cached) {
+    // Emit the full content as a single chunk so the UI streaming path is exercised
+    onChunk?.(cached.content);
+    return { ...cached, timestamp: new Date().toISOString() };
+  }
+
   const isContinuation = !!(conversationHistory && conversationHistory.length > 0);
   const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition, isContinuation, isDirectlyAddressed);
-  const contentParts = buildUserContent(stimulus, media, priorReactions, conversationHistory);
+  const contentParts = buildUserContent(stimulus, media, priorReactions, conversationHistory, speakingPosition);
 
   const hasImage = contentParts.some((p) => p.type === 'image');
 
@@ -265,17 +360,30 @@ export async function generatePersonaPanelReaction(
     };
   }
 
-  const result = await generateText({
-    model: getChatModel() as any,
+  const { textStream } = streamText({
+    model: getChatModel() as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     system: systemPrompt,
     messages: [userMessage],
     temperature: 0.85,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 300,
+    // Disable Gemini 2.5 Flash's default thinking — thinking tokens count
+    // against maxOutputTokens and will truncate the spoken response.
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingBudget: 0 },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
   });
 
-  const { content, sentiment, followUpHint } = extractReactionMeta(result.text.trim());
+  let fullText = '';
+  for await (const delta of textStream) {
+    fullText += delta;
+    onChunk?.(delta);
+  }
 
-  return {
+  const { content, sentiment, followUpHint } = extractReactionMeta(fullText.trim());
+
+  const reaction: PanelReaction = {
     personaId: persona.id,
     personaName: persona.name,
     content,
@@ -283,6 +391,9 @@ export async function generatePersonaPanelReaction(
     followUpHint,
     timestamp: new Date().toISOString(),
   };
+
+  setCachedReaction(cacheKey, reaction);
+  return reaction;
 }
 
 // ─── Follow-up reaction for a single persona ──────────────────────────────────
@@ -328,15 +439,25 @@ export async function generatePersonaFollowUp(
     userMessage = { role: 'user' as const, content: textContent };
   }
 
-  const result = await generateText({
+  const { textStream: followUpStream } = streamText({
     model: getChatModel() as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     system: systemPrompt,
     messages: [userMessage],
     temperature: 0.85,
-    maxOutputTokens: 512,
+    maxOutputTokens: 200,
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingBudget: 0 },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
   });
 
-  const { content, sentiment } = extractReactionMeta(result.text.trim());
+  let followUpText = '';
+  for await (const delta of followUpStream) {
+    followUpText += delta;
+  }
+
+  const { content, sentiment } = extractReactionMeta(followUpText.trim());
 
   return {
     personaId: persona.id,
@@ -357,14 +478,19 @@ export interface PanelReactionResult {
 
 /**
  * Run all persona reactions SEQUENTIALLY so each participant hears what
- * the previous ones said. The callback fires after each persona finishes,
- * allowing the API route to stream results turn by turn.
+ * the previous ones said. Callbacks fire at each stage, allowing the API
+ * route to stream results token-by-token via SSE.
  *
+ * @param onReactionComplete - Fires after each persona's full reaction is ready.
  * @param conversationHistory - Prior rounds from an autoplay session. When
  *   provided, personas are prompted to continue an ongoing discussion rather
  *   than give a first impression.
  * @param targetedPersonaId - When set, only this persona responds. All others
  *   are skipped (they remain aware via conversation history in future rounds).
+ * @param onReactionStart - Optional: fires just before a persona begins
+ *   generating, so the client can show a typing indicator immediately.
+ * @param onChunk - Optional: fires for each streamed token delta so the
+ *   client can render text progressively without waiting for the full response.
  */
 export async function generateAllPanelReactions(
   personas: Persona[],
@@ -373,6 +499,8 @@ export async function generateAllPanelReactions(
   onReactionComplete: (result: PanelReactionResult) => void,
   conversationHistory?: PanelReaction[][],
   targetedPersonaId?: string,
+  onReactionStart?: (personaId: string) => void,
+  onChunk?: (personaId: string, delta: string) => void,
 ): Promise<void> {
   const accumulated: PanelReaction[] = [];
 
@@ -385,6 +513,9 @@ export async function generateAllPanelReactions(
       continue;
     }
 
+    // Notify client before generation begins so it can show a typing indicator
+    onReactionStart?.(persona.id);
+
     try {
       const isDirectlyAddressed = !!targetedPersonaId;
       const reaction = await generatePersonaPanelReaction(
@@ -396,6 +527,7 @@ export async function generateAllPanelReactions(
         i,
         conversationHistory,
         isDirectlyAddressed,
+        onChunk ? (delta) => onChunk(persona.id, delta) : undefined,
       );
       accumulated.push(reaction);
       onReactionComplete({ reaction, error: null, personaId: persona.id });

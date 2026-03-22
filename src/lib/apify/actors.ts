@@ -67,15 +67,21 @@ export function buildSearchInput(
 /**
  * Input for apidojo/tweet-scraper.
  * Searches for tweets mentioning the company by keyword.
+ *
+ * Notes:
+ *  - The actor uses `maxItems` (not `maxTweets`) and `sort` (not `queryType`).
+ *  - The actor has a hard minimum of 50 results per query; niche companies
+ *    with fewer Twitter mentions will always return 0. Use "Top" sort to
+ *    maximise the chance of hitting that threshold.
  */
 export function buildTweetSearchInput(
   companyName: string,
-  maxTweets = 30
+  maxItems = 50
 ): Record<string, unknown> {
   return {
     searchTerms: [companyName],
-    maxTweets,
-    queryType: "Top",
+    maxItems,
+    sort: "Top",
   };
 }
 

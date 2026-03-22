@@ -88,6 +88,13 @@ function getInitials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
+/** Strip trailing partial or complete AI control tags from streamed text for display. */
+function cleanStreamingText(raw: string): string {
+  return raw
+    .replace(/\s*\[(?:SENTIMENT|FOLLOW_UP)[^\]]*\]?\s*$/gi, "")
+    .trim();
+}
+
 // ─── Media Preview ─────────────────────────────────────────────────────────────
 
 function MediaPreview({ media, onRemove }: { media: MediaAttachment; onRemove: () => void }) {
@@ -169,8 +176,10 @@ function PersonaReactionCard({
   isSpeaking,
   isFollowingUp,
   isListening,
+  isQueued,
   audioUrl,
   onReplayRequest,
+  streamingText,
 }: {
   persona: Persona;
   personaIndex: number;
@@ -181,8 +190,12 @@ function PersonaReactionCard({
   isFollowingUp: boolean;
   /** True when another persona is being directly addressed this round — this persona hears but doesn't respond. */
   isListening: boolean;
+  /** True when a round is running and this persona is queued to speak (hasn't started yet). */
+  isQueued: boolean;
   audioUrl: string | null;
   onReplayRequest: (personaId: string) => void;
+  /** Partial token text while the reaction is still streaming. Cleared when reaction is finalized. */
+  streamingText: string | null;
 }) {
   const color = AVATAR_COLORS[personaIndex % AVATAR_COLORS.length];
   // Sentiment is driven by the latest available reaction
@@ -190,6 +203,8 @@ function PersonaReactionCard({
   const sentimentStyle  = latest ? SENTIMENT_STYLES[latest.sentiment]       : "border-border bg-card";
   const sentimentLabel  = latest ? SENTIMENT_LABEL_STYLES[latest.sentiment] : "text-muted-foreground";
   const sentimentDot    = latest ? SENTIMENT_DOTS[latest.sentiment]         : "bg-muted-foreground";
+  // Active = currently thinking or streaming tokens
+  const isActive = isThinking || !!streamingText;
 
   return (
     <div
@@ -197,6 +212,7 @@ function PersonaReactionCard({
         "rounded-sm border-2 p-4 flex flex-col gap-3 transition-all duration-300",
         sentimentStyle,
         isSpeaking && "ring-2 ring-neon-cyan/40 ring-offset-1 ring-offset-background",
+        isActive && "ring-1 ring-foreground/15 ring-offset-1 ring-offset-background",
         isListening && !reaction && "opacity-50",
       )}
     >
@@ -249,21 +265,37 @@ function PersonaReactionCard({
 
       {/* Reaction content */}
       <div className="min-h-[60px] flex flex-col gap-2">
-        {isThinking && !reaction && (
+        {/* Waiting for first token — show spinner */}
+        {isThinking && !streamingText && !reaction && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin flex-shrink-0" />
             <span className="font-mono text-[10px] tracking-wider">THINKING...</span>
           </div>
         )}
+        {/* Tokens are arriving — render progressively with a blinking cursor */}
+        {streamingText && !reaction && (
+          <p className="text-sm text-foreground leading-relaxed">
+            {cleanStreamingText(streamingText)}
+            <span className="inline-block w-[2px] h-[0.85em] bg-foreground/60 animate-pulse ml-[2px] align-middle translate-y-[-1px]" />
+          </p>
+        )}
+        {/* Final reaction — shown once streaming is complete */}
         {reaction && (
           <p className="text-sm text-foreground leading-relaxed">{reaction.content}</p>
         )}
-        {!isThinking && !reaction && !isListening && (
+        {!isThinking && !streamingText && !reaction && !isListening && isQueued && (
+          <div className="flex items-center gap-1.5 text-muted-foreground/60 self-center">
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0ms]" />
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:150ms]" />
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:300ms]" />
+          </div>
+        )}
+        {!isThinking && !streamingText && !reaction && !isListening && !isQueued && (
           <p className="font-mono text-[10px] text-muted-foreground/50 tracking-wider self-center w-full text-center">
             AWAITING STIMULUS
           </p>
         )}
-        {!isThinking && !reaction && isListening && (
+        {!isThinking && !streamingText && !reaction && isListening && (
           <div className="flex items-center justify-center gap-1.5 text-muted-foreground/50">
             <Users className="h-3 w-3" />
             <span className="font-mono text-[10px] tracking-wider">LISTENING IN</span>
@@ -384,6 +416,10 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   // personaId of the follow-up currently being generated
   const [followUpLoadingId, setFollowUpLoadingId] = useState<string | null>(null);
 
+  // ── Streaming text state ─────────────────────────────────────────────────────
+  // personaId → accumulated token text while a reaction is being streamed
+  const [streamingText, setStreamingText] = useState<Map<string, string>>(new Map());
+
   // ── Audio queue state ────────────────────────────────────────────────────────
   // Stored audio URLs per persona (for replay)
   const [audioUrls, setAudioUrls]               = useState<Map<string, string>>(new Map());
@@ -397,6 +433,13 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
   const audioQueueRef = useRef<Array<{ personaId: string; url: string }>>([]);
   // Track whether the queue processor is running so we don't start it twice
   const processingRef = useRef(false);
+
+  // ── Sentence-level TTS prefetch refs ─────────────────────────────────────────
+  // personaId → text accumulated during streaming (for sentence boundary detection)
+  const ttsStreamBufferRef = useRef<Map<string, string>>(new Map());
+  // personaId → in-flight TTS fetch for the first detected sentence
+  type TtsPrefetch = { sentence: string; promise: Promise<string | null>; voice: string };
+  const ttsPrefetchRef = useRef<Map<string, TtsPrefetch>>(new Map());
 
   // ── @mention / targeting state ───────────────────────────────────────────────
   // Non-null while user is typing an @word: the partial name after @
@@ -500,23 +543,28 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
   // ── TTS fetch and enqueue ────────────────────────────────────────────────────
 
-  const fetchAndEnqueueTTS = useCallback(async (reaction: PanelReaction, ttsVoice: string) => {
+  /** Fetches TTS for any text and returns a blob URL, or null on failure. */
+  const fetchTTSSegment = useCallback(async (text: string, voice: string): Promise<string | null> => {
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: reaction.content, voice: ttsVoice }),
+        body: JSON.stringify({ text, voice }),
       });
-      if (!res.ok) return;
+      if (!res.ok) return null;
       const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-
-      setAudioUrls((prev) => new Map(prev).set(reaction.personaId, url));
-      enqueueAudio(reaction.personaId, url);
+      return URL.createObjectURL(blob);
     } catch {
-      // TTS failure is non-fatal — the panel still works without audio
+      return null;
     }
-  }, [enqueueAudio]);
+  }, []);
+
+  const fetchAndEnqueueTTS = useCallback(async (reaction: PanelReaction, ttsVoice: string) => {
+    const url = await fetchTTSSegment(reaction.content, ttsVoice);
+    if (!url) return;
+    setAudioUrls((prev) => new Map(prev).set(reaction.personaId, url));
+    enqueueAudio(reaction.personaId, url);
+  }, [fetchTTSSegment, enqueueAudio]);
 
   // ── Replay a persona's audio ─────────────────────────────────────────────────
 
@@ -659,6 +707,13 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
     setFollowUps(new Map());
     setFollowUpLoadingId(null);
 
+    // Reset streaming state and cancel any in-flight TTS prefetches
+    ttsStreamBufferRef.current.clear();
+    for (const prefetch of Array.from(ttsPrefetchRef.current.values())) {
+      prefetch.promise.then((url: string | null) => { if (url) URL.revokeObjectURL(url); });
+    }
+    ttsPrefetchRef.current.clear();
+
     if (targetedPersonaId) {
       // Keep existing reactions for non-targeted personas — they're "listening in"
       setReactions((prev) => {
@@ -666,8 +721,14 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
         next.delete(targetedPersonaId);
         return next;
       });
+      setStreamingText((prev) => {
+        const next = new Map(prev);
+        next.delete(targetedPersonaId);
+        return next;
+      });
     } else {
       setReactions(new Map());
+      setStreamingText(new Map());
     }
 
     const roundReactions: PanelReaction[] = [];
@@ -715,10 +776,51 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
             if (event.type === "persona_reaction_start") {
               setThinkingPersonaId(event.personaId);
+              // Prime the streaming text entry so the card transitions from
+              // spinner to streaming text as soon as the first token arrives.
+              setStreamingText((prev) => new Map(prev).set(event.personaId, ""));
+              ttsStreamBufferRef.current.set(event.personaId, "");
+            }
+
+            if (event.type === "persona_reaction_chunk") {
+              const { personaId, delta } = event as { type: string; personaId: string; delta: string };
+              setStreamingText((prev) => {
+                const next = new Map(prev);
+                next.set(personaId, (next.get(personaId) ?? "") + delta);
+                return next;
+              });
+
+              // Sentence-level TTS prefetch: as soon as the first complete sentence
+              // is detected in the stream, fire a TTS request in the background so
+              // audio is ready to play sooner once the reaction is finalized.
+              const buf = (ttsStreamBufferRef.current.get(personaId) ?? "") + delta;
+              ttsStreamBufferRef.current.set(personaId, buf);
+              if (!ttsPrefetchRef.current.has(personaId)) {
+                const sentenceMatch = buf.match(/^([\s\S]+?[.!?])(?:\s|$)/);
+                if (sentenceMatch) {
+                  const sentence = sentenceMatch[1];
+                  const personaIndex = personas.findIndex((p) => p.id === personaId);
+                  const ttsVoice = TTS_VOICES[personaIndex % TTS_VOICES.length];
+                  ttsPrefetchRef.current.set(personaId, {
+                    sentence,
+                    promise: fetchTTSSegment(sentence, ttsVoice),
+                    voice: ttsVoice,
+                  });
+                }
+              }
             }
 
             if (event.type === "persona_reaction_complete") {
               const reaction = event.reaction as PanelReaction;
+
+              // Clear streaming state for this persona
+              setStreamingText((prev) => {
+                const next = new Map(prev);
+                next.delete(reaction.personaId);
+                return next;
+              });
+              ttsStreamBufferRef.current.delete(reaction.personaId);
+
               setThinkingPersonaId(null);
               setReactions((prev) => new Map(prev).set(reaction.personaId, reaction));
               roundReactions.push(reaction);
@@ -729,7 +831,38 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
 
               const personaIndex = personas.findIndex((p) => p.id === reaction.personaId);
               const ttsVoice     = TTS_VOICES[personaIndex % TTS_VOICES.length];
-              fetchAndEnqueueTTS(reaction, ttsVoice);
+
+              // If a first-sentence TTS was prefetched during streaming, use it
+              // for early audio playback then queue the remaining text.
+              const prefetch = ttsPrefetchRef.current.get(reaction.personaId);
+              ttsPrefetchRef.current.delete(reaction.personaId);
+
+              if (prefetch && reaction.content.startsWith(prefetch.sentence)) {
+                prefetch.promise.then(async (firstUrl) => {
+                  if (!firstUrl) {
+                    fetchAndEnqueueTTS(reaction, ttsVoice);
+                    return;
+                  }
+                  enqueueAudio(reaction.personaId, firstUrl);
+
+                  const remaining = reaction.content.slice(prefetch.sentence.length).trim();
+                  if (remaining) {
+                    const remainingUrl = await fetchTTSSegment(remaining, ttsVoice);
+                    if (remainingUrl) enqueueAudio(reaction.personaId, remainingUrl);
+                  }
+
+                  // Fetch the full reaction text for the replay button in the background
+                  fetchTTSSegment(reaction.content, ttsVoice).then((replayUrl) => {
+                    if (replayUrl) setAudioUrls((prev) => new Map(prev).set(reaction.personaId, replayUrl));
+                  });
+                });
+              } else {
+                // Discard stale prefetch if sentence didn't match clean content
+                if (prefetch) {
+                  prefetch.promise.then((url) => { if (url) URL.revokeObjectURL(url); });
+                }
+                fetchAndEnqueueTTS(reaction, ttsVoice);
+              }
             }
 
             if (event.type === "round_complete") {
@@ -754,7 +887,7 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
       setThinkingPersonaId(null);
       setIsRunning(false);
     }
-  }, [jobId, personas, fetchAndEnqueueTTS]);
+  }, [jobId, personas, fetchAndEnqueueTTS, fetchTTSSegment, enqueueAudio]);
 
   async function runPanel() {
     const text = input.trim();
@@ -837,6 +970,13 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
       audioRef.current.currentTime = 0;
     }
     setCurrentSpeakerId(null);
+    // Clear any in-progress streaming state and TTS prefetches
+    setStreamingText(new Map());
+    ttsStreamBufferRef.current.clear();
+    for (const prefetch of Array.from(ttsPrefetchRef.current.values())) {
+      prefetch.promise.then((url: string | null) => { if (url) URL.revokeObjectURL(url); });
+    }
+    ttsPrefetchRef.current.clear();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -1065,8 +1205,15 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
             isSpeaking={currentSpeakerId === persona.id}
             isFollowingUp={followUpLoadingId === persona.id}
             isListening={!!activeRoundTargetId && persona.id !== activeRoundTargetId}
+            isQueued={
+              isRunning &&
+              !reactions.has(persona.id) &&
+              thinkingPersonaId !== persona.id &&
+              !(!!activeRoundTargetId && persona.id !== activeRoundTargetId)
+            }
             audioUrl={audioUrls.get(persona.id) ?? null}
             onReplayRequest={handleReplayRequest}
+            streamingText={streamingText.get(persona.id) ?? null}
           />
         ))}
       </div>
@@ -1197,46 +1344,47 @@ export function FocusGroupPanel({ personas, jobId, sessionId: initialSessionId }
           </div>
         )}
 
-        {/* Text input row */}
-        <div className="p-3 flex gap-2 items-end bg-secondary/10 relative">
-          {/* @mention dropdown — appears above the input row */}
-          {mentionQuery !== null && mentionFilteredPersonas.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 bg-popover border border-border rounded-t-sm shadow-lg overflow-hidden z-50">
-              <div className="px-3 py-1 border-b border-border bg-secondary/30">
-                <span className="font-mono text-[9px] text-muted-foreground/60 tracking-widest">DIRECT TO PERSONA</span>
-              </div>
-              {mentionFilteredPersonas.map((p, idx) => {
-                const pIdx = personas.indexOf(p);
-                const color = AVATAR_COLORS[pIdx % AVATAR_COLORS.length];
-                return (
-                  <button
-                    key={p.id}
-                    onMouseDown={(e) => { e.preventDefault(); selectMentionPersona(p); }}
-                    className={cn(
-                      "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
-                      idx === mentionSelectedIndex
-                        ? "bg-secondary/60"
-                        : "hover:bg-secondary/30",
-                    )}
-                  >
-                    <div className={cn(
-                      "h-6 w-6 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[9px] font-bold flex-shrink-0",
-                      color,
-                    )}>
-                      {getInitials(p.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="font-mono text-xs font-bold text-foreground">{p.name}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground ml-2 truncate">{p.title}</span>
-                    </div>
-                    {idx === mentionSelectedIndex && (
-                      <span className="font-mono text-[9px] text-muted-foreground/50 flex-shrink-0">↵</span>
-                    )}
-                  </button>
-                );
-              })}
+        {/* @mention dropdown — inline section, avoids overflow-hidden clipping */}
+        {mentionQuery !== null && mentionFilteredPersonas.length > 0 && (
+          <div className="border-b border-border">
+            <div className="px-3 py-1 bg-secondary/20 border-b border-border">
+              <span className="font-mono text-[9px] text-muted-foreground/60 tracking-widest">DIRECT TO PERSONA — type more to filter</span>
             </div>
-          )}
+            {mentionFilteredPersonas.map((p, idx) => {
+              const pIdx = personas.indexOf(p);
+              const color = AVATAR_COLORS[pIdx % AVATAR_COLORS.length];
+              return (
+                <button
+                  key={p.id}
+                  onMouseDown={(e) => { e.preventDefault(); selectMentionPersona(p); }}
+                  className={cn(
+                    "w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors",
+                    idx === mentionSelectedIndex
+                      ? "bg-secondary/60"
+                      : "hover:bg-secondary/30",
+                  )}
+                >
+                  <div className={cn(
+                    "h-6 w-6 rounded-sm flex items-center justify-center text-primary-foreground font-mono text-[9px] font-bold flex-shrink-0",
+                    color,
+                  )}>
+                    {getInitials(p.name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="font-mono text-xs font-bold text-foreground">{p.name}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground ml-2 truncate">{p.title}</span>
+                  </div>
+                  {idx === mentionSelectedIndex && (
+                    <span className="font-mono text-[9px] text-muted-foreground/50 flex-shrink-0">↵</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Text input row */}
+        <div className="p-3 flex gap-2 items-end bg-secondary/10">
           {/* Upload button */}
           <button
             onClick={() => fileInputRef.current?.click()}

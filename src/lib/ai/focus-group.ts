@@ -82,7 +82,8 @@ What you'd likely do: ${persona.fiveSecondReaction.likelyAction}`;
 export function buildFocusGroupPersonaPrompt(
   persona: Persona,
   allPersonas: Persona[],
-  phase: FocusGroupPhase
+  phase: FocusGroupPhase,
+  isDirectlyAddressed: boolean = false,
 ): string {
   const context = buildPersonaContext(persona, allPersonas);
 
@@ -99,10 +100,24 @@ export function buildFocusGroupPersonaPrompt(
       'Reference what other participants said if relevant. Keep it 2–4 sentences.',
   };
 
+  const directAddressInstruction: Record<FocusGroupPhase, string> = {
+    probe:
+      'The founder is speaking directly to you with this question or claim. ' +
+      'Respond personally and candidly — this is your moment to be specific. ' +
+      'You may acknowledge what others have said, but answer for yourself. Keep it 2–4 sentences.',
+    flip:
+      'The founder addressed you specifically in their answer. ' +
+      'React directly to what they said to you — push back if unconvinced, or acknowledge if they resolved your concern. Keep it 2–4 sentences.',
+  };
+
+  const instruction = isDirectlyAddressed
+    ? directAddressInstruction[phase]
+    : phaseInstructions[phase];
+
   return `${context}
 
 ## Your role right now
-${phaseInstructions[phase]}
+${instruction}
 
 Stay in character at all times. Do not break the fourth wall or reveal you are an AI. You can address other participants by name.`;
 }
@@ -170,9 +185,10 @@ export async function generatePersonaTurn(
   persona: Persona,
   allPersonas: Persona[],
   messages: FocusGroupMessage[],
-  phase: FocusGroupPhase
+  phase: FocusGroupPhase,
+  isDirectlyAddressed: boolean = false,
 ): Promise<PersonaTurnResult> {
-  const systemPrompt = buildFocusGroupPersonaPrompt(persona, allPersonas, phase);
+  const systemPrompt = buildFocusGroupPersonaPrompt(persona, allPersonas, phase, isDirectlyAddressed);
   const conversationSoFar = formatConversationHistory(messages);
 
   const userContent = conversationSoFar
