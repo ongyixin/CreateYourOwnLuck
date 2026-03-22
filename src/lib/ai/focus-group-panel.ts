@@ -42,11 +42,14 @@ function buildCacheKey(
   media: MediaAttachment | undefined,
   priorReactions: PanelReaction[],
   conversationHistory: PanelReaction[][] | undefined,
+  experimentModeratorAppend?: string,
 ): string {
   const h = createHash('sha256');
   h.update(personaId);
   h.update('|');
   h.update(stimulus ?? '');
+  h.update('|');
+  h.update(experimentModeratorAppend ?? '');
   h.update('|');
   if (media) {
     h.update(media.type + ':' + media.name);
@@ -123,6 +126,7 @@ function buildPanelPrompt(
   speakingPosition: number,
   isContinuation: boolean,
   isDirectlyAddressed: boolean = false,
+  experimentModeratorAppend?: string,
 ): string {
   const context = buildPersonaContext(persona, allPersonas);
   const isFirst = speakingPosition === 0;
@@ -169,7 +173,19 @@ Guidelines:
 - After your reaction, add a sentiment tag on its own line:
   [SENTIMENT: positive|neutral|skeptical|negative]${followUpInstruction}
 
-Stay fully in character as ${persona.name}. Do not mention being an AI.`;
+Stay fully in character as ${persona.name}. Do not mention being an AI.${
+    experimentModeratorAppend
+      ? `
+
+## Controlled experiment (mandatory)
+The moderator is running a structured study. You MUST:
+- Follow the instructions below exactly — do not drift into unrelated topics, hypotheticals, or meta commentary about research.
+- Answer only what is asked for this turn; stay within the stimulus and the stated question.
+- If something is unclear, say so briefly — do not invent product details not shown.
+
+${experimentModeratorAppend}`
+      : ''
+  }`;
 }
 
 function buildFollowUpPrompt(
@@ -321,9 +337,17 @@ export async function generatePersonaPanelReaction(
   conversationHistory?: PanelReaction[][],
   isDirectlyAddressed: boolean = false,
   onChunk?: (delta: string) => void,
+  experimentModeratorAppend?: string,
 ): Promise<PanelReaction> {
   // Check cache first — skip AI call entirely on hits
-  const cacheKey = buildCacheKey(persona.id, stimulus, media, priorReactions, conversationHistory);
+  const cacheKey = buildCacheKey(
+    persona.id,
+    stimulus,
+    media,
+    priorReactions,
+    conversationHistory,
+    experimentModeratorAppend,
+  );
   const cached = getCachedReaction(cacheKey);
   if (cached) {
     // Emit the full content as a single chunk so the UI streaming path is exercised
@@ -332,7 +356,14 @@ export async function generatePersonaPanelReaction(
   }
 
   const isContinuation = !!(conversationHistory && conversationHistory.length > 0);
-  const systemPrompt = buildPanelPrompt(persona, allPersonas, speakingPosition, isContinuation, isDirectlyAddressed);
+  const systemPrompt = buildPanelPrompt(
+    persona,
+    allPersonas,
+    speakingPosition,
+    isContinuation,
+    isDirectlyAddressed,
+    experimentModeratorAppend,
+  );
   const contentParts = buildUserContent(stimulus, media, priorReactions, conversationHistory, speakingPosition);
 
   const hasImage = contentParts.some((p) => p.type === 'image');
@@ -501,8 +532,10 @@ export async function generateAllPanelReactions(
   targetedPersonaId?: string,
   onReactionStart?: (personaId: string) => void,
   onChunk?: (personaId: string, delta: string) => void,
+  options?: { experimentModeratorAppend?: string },
 ): Promise<void> {
   const accumulated: PanelReaction[] = [];
+  const experimentModeratorAppend = options?.experimentModeratorAppend;
 
   for (let i = 0; i < personas.length; i++) {
     const persona = personas[i];
@@ -528,6 +561,7 @@ export async function generateAllPanelReactions(
         conversationHistory,
         isDirectlyAddressed,
         onChunk ? (delta) => onChunk(persona.id, delta) : undefined,
+        experimentModeratorAppend,
       );
       accumulated.push(reaction);
       onReactionComplete({ reaction, error: null, personaId: persona.id });
