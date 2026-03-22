@@ -85,7 +85,6 @@ export default function ReportsPage() {
     }
   }
 
-
   return (
     <div className="min-h-screen bg-background text-foreground font-mono">
       <ScanlineOverlay />
